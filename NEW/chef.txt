@@ -1,0 +1,93 @@
+Chef_File: PREMIER analyses
+
+premier=/humgen/florezlab/users/jgervis/premier
+merino_dir=/humgen/florezlab/users/jmerino/PREMIER/diet.variants/macronutrients.ps/
+
+
+######################################
+## Re-calculating macronutrient PGS ##
+######################################
+
+## Pull GWAS summary statistics for genome-wide significant variants 
+# GWAS: Merino et al., BMI-adjusted (build: hg19)
+cp $merino_dir/all.snps.upd.txt ../data/raw/merino_macros_allsnps_signif.txt
+
+## Prepare summary stats for PGS calculation
+R --no-save <<EOF
+library(tidyverse) ; library(data.table)
+fread("../data/raw/merino_macros_allsnps_signif.txt") %>% 
+  mutate(EA_aligned=ifelse(beta>0,EA,NEA), NEA_aligned=ifelse(beta>0,NEA,EA), EAF_aligned=ifelse(beta>0,EAF, 1-EAF)) %>%
+  mutate(BETA=abs(beta), SE=se) %>%
+  select(SNP, CHR, BP, EA=EA_aligned, NEA=NEA_aligned, EAF=EAF_aligned, BETA, SE, LOCUS, PHENO=Pheno) %>%
+  fwrite("../data/processed/merino_macros_pgsInput.txt", sep="\t") 
+EOF
+
+# liftOver from hg19 to hg38
+Rscript ../scripts/data_prep/liftOver.R ../data/raw/merino_macros_pgsInput.txt
+
+# Make bgen with genome-wide significant variants for PGS calculation
+awk '{ if (NR>1) print $2 }' ../data/raw/merino_macros_pgsInput.txt > ./merino_allsnps_signif_forPGS.snplist 
+
+#-Add chr to var_id (chrX:pos:ref:alt) & rename columns
+#-Align ea/nea to beta>0
+#-Print: var_id,chr,pos,ref,alt,ea,nea,effect,se
+for macro in {carb,fat} ; do qsub ../scripts/data_prep/prep_sumstats.sh $macro ; done
+
+
+######################################
+## Statitical Analyses 
+######################################
+
+# Preapre analytical & metabolomics datasets
+Rscript --no-save ../scripts/prep_data.R
+Rscript --no-save ../scripts/prep_metab.R
+Rscript --no-save ../scripts/postprocess_metab.R
+
+
+EOF
+
+
+
+
+
+
+
+
+
+
+
+###############
+## TEMPORARY ##
+###############
+
+
+
+R --no-save <<EOF
+library(tidyverse);library(data.table)
+macro=fread("../data/raw/macronutrients.plink.fliped.txt") %>%
+separate(V1, into=c("chr", "pos", "a1", "a2"), sep=":") %>%
+mutate(var_id=paste(chr,pos,a2,a1,sep=":")) %>%
+mutate(var_id=gsub("[:]NA[:]NA", "", var_id)) %>%
+select(var_id, ea=V2, beta=V3) %>%
+fwrite("merino_macro_sumstats_forPGS.txt", sep="\t")
+EOF
+
+awk '{ if (NR>1) print "chr" $1 }' merino_macro_sumstats_forPGS.txt > merino_macro_snplist_forPGS.txt
+
+## Add indicator for macronutrient score
+R --no-save <<EOF
+library(tidyverse);library(data.table)
+a=fread(../data/raw/merino_allsnps_macro_sumstats_hg38.txt")
+b=fread("../data/raw/snpval.txt")
+a %>% mutate(val=b$V2) %>%
+filter(ch_hg38 != 23 ) %>%
+select(var_id, val) %>% head()
+EOF
+
+
+
+## Calculate PGS (using array job) for each macronutrient
+
+for macro in {carb,fat,pro} ; do qsub -t 1-22 ../scripts/pgs/calculate_pgs.sh ${macro} ; done
+for macro in {carb,fat,pro} ; do Rscript ../scripts/pgs/combine_pgs.R ${macro} ; done
+

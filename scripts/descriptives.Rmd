@@ -1,0 +1,248 @@
+---
+title: "premier_descriptives"
+output: html_document
+theme: united
+date: "2025-01-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Load libraries
+library(Hmisc)
+library(tidyverse)
+library(data.table)
+library(devtools)
+library(ggpubr)
+library(knitr)
+
+# Load pantry "package"
+lapply(list.files("../../pantry/functions/", recursive = T, full.names = T), source)
+
+analysis <- readRDS("../data/processed/premier_analysis.rda")
+
+```
+
+
+## Participant characteristics
+
+Demographic/anthropometric characteristics
+```{r, echo=F, warning=F}
+## Demoraphic/anthropometric characteristics
+vars_to_summarise.demos <- c(
+  age="Age, years", Sex="Sex", Race2="Race", Ethnicity="Ethnicity", bmi="BMI, kg/m2", 
+  whr="Waist-Hip", sbp="SBP, mmHg", dbp="DBP, mmHg", hba1c="HbA1c"
+  )
+
+demos_total <- print_summary_table(data=analysis, vars_to_summarize = vars_to_summarise.demos, p_adjust = "none")
+demos_pps <- print_summary_table(analysis,  vars_to_summarise.demos, p_adjust = "none", var_strata = "genetic_category.lab", p_types = "descriptive")
+
+table1_dems <- left_join(demos_total %>% mutate(Vars=rownames(.), .before=Total), 
+                         demos_pps %>% mutate(Vars=rownames(.), .before="Total") %>% select(-Total), by="Vars") 
+
+table1_dems %>% kable()
+table1_dems %>% write.csv("../data/processed/tab_descr_dems.csv")
+```
+
+Baseline (fasted) metbolites
+```{r, echo=F}
+vars_to_summarise.metab <- c(
+  glucose="Glucose, mg/dL", insulin="Insulin", tg_log="log(Triglyceride)", chol="Total cholesterol", 
+  hdl="HDL cholesterol", ldl="LDL cholesterol", protein="Total protein", alb="Albumin", 
+  globulin="Globulin", alb_globulin_ratio="Albumin:Globulin", tot_bilirubin_log="log(Total Bilirubin)", 
+  dir_bilirubin_log="log(Direct Bilirubin)", ast="AST", alt_log="Log(ALT)")
+
+metabolites_total <- print_summary_table(data=analysis, vars_to_summarize = vars_to_summarise.metab, p_adjust = "agesex") %>%
+  bind_cols(
+    Range=c("-", analysis %>% select(names(vars_to_summarise.metab)) %>% summarise_all(., ~range_formatted(.)) %>% t())
+    ) %>% rename(Summary=Total)
+
+metabolites_strat <- print_summary_table(data=analysis, vars_to_summarize = vars_to_summarise.metab, p_adjust = "agesex", var_strata = "genetic_category.lab", var_strata_order = c("Prefer Carb", "Prefer Fat"), p_types = "descriptive")
+
+cbind.data.frame(metabolites_total, metabolites_strat[,-1]) %>% kable()
+
+
+```
+
+## Postprandial meal responses 
+
+### Aim 1 - Determine the imapct of genetic predisposition for nutrient preference on postprandial responses to a standardized mixed-meal
+```{r, echo=F}
+#Absolute 
+vars_to_summarise_postpran <- c(paste0(
+  rep(c("Glucose ", "Insulin "), each=5), rep(c("0", "30", "60", "120", "180"), 2), rep("min", 10)))
+names(vars_to_summarise_postpran) <- c(paste0(
+  rep(c("glucose", "insulin"), each=5), rep(c("", "_30", "_60", "_120", "_180"), 2))) 
+
+#AUCs
+vars_to_summarise_auc <- c(paste0(
+  rep(c("Glucose ", "Insulin "), each=4), rep(c("30", "60", "120", "180"), 2), rep("min AUC",8)))
+names(vars_to_summarise_auc) <- c(paste0(
+  rep(c("glucose_", "insulin_"), each=4), rep(c("30", "60", "120", "180"), 2),  rep("auc",8)))
+
+#iAUCs
+vars_to_summarise_iauc <- c(paste0(
+  rep(c("Glucose ", "Insulin "), each=4), rep(c("30", "60", "120", "180"), 2), rep("min iAUC",8)))
+names(vars_to_summarise_iauc) <- c(paste0(
+  rep(c("glucose_", "insulin_"), each=4), rep(c("30", "60", "120", "180"), 2),  rep("iauc",8)))
+
+```
+
+
+```{r, echo=F, fig.width=10, fig.height=4, warning=F}
+#print_summary_table(data=analysis, vars_to_summarize = vars_to_summarise_postpran, p_adjust = "none") %>% t() %>% kable
+#print_summary_table(data=analysis, vars_to_summarize = vars_to_summarise_auc, p_adjust = "none") %>% t() %>% kable
+
+#Function to generate spaghetti plot of postprandial metabolites, overall 
+plot_ppXtime <- function(metabolite, times = c(0, 30, 60, 120, 180), fill_color) {
+  analysis %>% select(id, starts_with(metabolite), genetic_category.lab) %>%
+    rename_with(~gsub(metabolite, "x", .), starts_with(metabolite)) %>%
+    rename(x_0=x) %>%
+    rename_with(., ~gsub("m", "", gsub("_log", "", .))) %>%
+    select(id, paste0("x_", times)) %>%
+    pivot_longer(-id, names_sep="_", names_to=c("metabolite", "time")) %>%
+    mutate(across(c("time", "value"), ~as.numeric(.))) %>%
+    ggplot(aes(x=time, y=value, group=id)) + 
+    scale_x_continuous(breaks=times) +
+    geom_vline(xintercept = 0, color="black", linewidth=1.25) +
+    geom_line(alpha=0.55, color=fill_color) + 
+    stat_summary(aes(group = metabolite), geom = "point", fun = mean, size = 4, color=fill_color) + 
+    stat_summary(aes(group = metabolite), geom = "line", fun = mean, linewidth = 2, color=fill_color) + 
+    #scale_color_manual(values=fill_color) + scale_fill_manual(values=fill_color) + 
+    xlab("Time (minutes)") + ylab("Concentration") + 
+    theme_bw() #+ 
+    #ggtitle(paste("Postprandial", metabolite, "at", paste0(times, collapse=", "), "min"))
+}
+
+plot_ppglu_tot <- plot_ppXtime("glucose", times=c(0,30,60,120,180), fill_color = palettes$NatMainBackground2$Level2[2])
+plot_ppinsu_tot <- plot_ppXtime("insulin", times=c(0,30,60,120,180), fill_color = palettes$NatMainBackground2$Level2[2])
+
+fig_pp_total <- ggarrange(plot_ppglu_tot, plot_ppinsu_tot) 
+fig_pp_total %>% ggsave(filename="../output/fig_postprandial_glu_insu.pdf", height=3.5, width=8)
+
+
+```
+
+```{r, echo=F, fig.width=10, fig.height=5}
+plot_ppXtimeXstrat <- function(metabolite, times = c(0, 30, 60, 120, 180), fill_colors=c(palettes$NatMainAccent3$Level2[1:2])) {
+  analysis %>% select(id, starts_with(metabolite), genetic_category.lab) %>%
+    rename_with(~gsub(metabolite, "x", .), starts_with(metabolite)) %>%
+    rename(x_0=x) %>%
+    rename_with(., ~gsub("m", "", gsub("_log", "", .))) %>%
+    select(id, genetic_category.lab, paste0("x_", times)) %>%
+    pivot_longer(-c(id, genetic_category.lab), names_sep="_", names_to=c("metabolite", "time")) %>%
+    mutate(across(c("time", "value"), ~as.numeric(.))) %>%
+    filter(!is.na(genetic_category.lab)) %>%
+    ggplot(aes(x=time, y=value, group=id, color=genetic_category.lab)) + 
+    scale_x_continuous(breaks=times) +
+    geom_vline(xintercept = 0, color="grey25", linewidth=1.55) +
+    geom_line(alpha=0.55) + 
+    scale_color_manual(values=fill_colors, name="PPS") + 
+    stat_summary(aes(group = genetic_category.lab, color=genetic_category.lab), geom = "point", fun = mean, size = 4) + 
+    stat_summary(aes(group = genetic_category.lab, color=genetic_category.lab), geom = "line", fun = mean, linewidth = 2) + 
+    xlab("Time (minutes)") + ylab("Concentration") + 
+    theme_bw() + 
+    ggtitle(paste("Postprandial", metabolite, "at", paste0(times, collapse=", "), "min"))
+}
+
+plot_ppglu_strat <- plot_ppXtimeXstrat("glucose", times=c(0,30,60,120,180))
+plot_ppinsu_strat <- plot_ppXtimeXstrat("insulin", times=c(0,30,60,120,180))
+
+fig_pp_strat <- ggarrange(plot_ppglu_strat, plot_ppinsu_strat, common.legend = T)
+fig_pp_strat
+
+
+print_summary_table(data=analysis, vars_to_summarize = vars_to_summarise_postpran, digits=c(1,1,3),
+                    p_adjust = "none", p_types="descriptive", var_strata = "genetic_category.lab", 
+                    var_strata_order = c("Prefer Carb", "Prefer Fat")) %>% t() %>% kable()
+print_summary_table(data=analysis, vars_to_summarize = vars_to_summarise_auc, digits=c(1,1,3),
+                    p_adjust = "none", p_types="descriptive", var_strata = "genetic_category.lab",
+                    var_strata_order = c("Prefer Carb", "Prefer Fat")) %>% t() %>% kable()
+
+```
+
+Summarise means at each time point
+```{r, echo=F, fig.height=5, fig.width=10}
+plot_ppXtimeXstrat_summary <- function(metabolite, times = c(0, 30, 60, 120, 180), fill_colors=c(palettes$NatMainAccent3$Level2[1:2])) {
+  analysis %>% select(id, starts_with(metabolite), genetic_category.lab) %>%
+    rename_with(~gsub(metabolite, "x", .), starts_with(metabolite)) %>%
+    rename(x_0=x) %>% rename_with(., ~gsub("m", "", gsub("_log", "", .))) %>%
+    select(id, genetic_category.lab, paste0("x_", times)) %>%
+    pivot_longer(-c(id, genetic_category.lab), names_sep="_", names_to=c("metabolite", "time")) %>%
+    mutate(across(c("time", "value"), ~as.numeric(.))) %>%
+    group_by(genetic_category.lab, time) %>% 
+    reframe(mean=mean(value, na.rm=T), sd=sd(value, na.rm=T)) %>%
+    filter(!is.na(genetic_category.lab)) %>%
+    ggplot(aes(x=time, y=mean, ymin=mean-sd, ymax=mean+sd, group=genetic_category.lab, color=genetic_category.lab)) + 
+    scale_x_continuous(breaks=times) +
+    geom_vline(xintercept = 0, color="grey25", linewidth=1.35) +
+    geom_line(alpha=0.85, position=position_dodge(10.5), linewidth=1.15) + 
+    geom_point(size=3.5, position=position_dodge(10.5)) +
+    geom_errorbar(width=8.25, linewidth=0.75, alpha=0.85, position=position_dodge(10.5)) +
+    scale_color_manual(values=fill_colors, name="Genetic Category") + 
+    xlab("Time (minutes)") + ylab("Concentration") + 
+    theme_bw() #+ 
+    #ggtitle(paste("Postprandial", metabolite, "at", paste0(times, collapse=", "), "min")) + 
+}
+
+plot_ppglu_strat_sum <- plot_ppXtimeXstrat_summary("glucose", times=c(0,30,60,120,180))
+plot_ppinsu_strat_sum <- plot_ppXtimeXstrat_summary("insulin", times=c(0,30,60,120,180))
+
+fig_pp_sum_strat <- ggarrange(plot_ppglu_strat_sum, plot_ppinsu_strat_sum, common.legend = T, legend = "bottom")
+fig_pp_sum_strat
+```
+
+```{r, echo=F,height=4, width=6}
+##AUC
+plot_ppAUC_panel <- function(metabolite, auc=120, fill_color=c(palettes$NatMainAccent3$Level2[1:2])) {
+  dat <- analysis %>% select(id, starts_with(metabolite) & ends_with(paste0(auc,"auc")), genetic_category.lab) %>%
+    rename_at(paste0(metabolite, "_", auc, "auc"), ~gsub(paste0("[_]", auc,"auc"), "", gsub(metabolite, "value", .))) %>%
+    group_by(genetic_category.lab) %>% filter(complete.cases(genetic_category.lab)) %>%
+    reframe(mean=mean(value), sd=sd(value))
+    dat %>% ggplot(aes(x=genetic_category.lab, y=mean, ymin=mean-sd, ymax=mean+sd, fill=genetic_category.lab)) + 
+    geom_bar(stat="identity") + geom_errorbar(width=0.25) +
+    xlab("Genetic category") + ylab("120-min AUC") + 
+    scale_fill_manual(values=fill_color, name="Genetic Category") + 
+    theme_bw() #+ 
+    #ggtitle(paste("Postprandial", metabolite, "at", paste0(times, collapse=", "), "min"))
+}
+
+fig_ppAUC_strat <- ggarrange(
+  "", plot_ppAUC_panel("glucose") + scale_y_continuous(limits=c(0,16000), breaks=seq(0,16000,4000)), "",
+  plot_ppAUC_panel("insulin") + ylim(0,8000), "", 
+  widths=c(0.2, 0.8, 0.4,0.8,0.2), common.legend = T, legend = "none", nrow = 1)
+
+fig_ppAUC_strat
+```
+
+```{r, include=F}
+#Multi-panel plot
+multi_panel<-ggarrange(fig_pp_total, fig_pp_sum_strat, fig_ppAUC_strat, nrow=3, heights=c(1.25,1.55,0.85), align="v") 
+multi_panel %>% ggsave(filename="../output/fig_multipanel_pp_tot_stratsum.pdf", height=8, width=8)
+multi_panel
+```
+
+
+#### Supplementary: AUC glucose and insulin by genetic category
+```{r, echo=F, fig.height=6, fig.width=6}
+analysis %>% select(id, genetic_category.lab, names(vars_to_summarise_auc)) %>%
+  pivot_longer(-c(id, genetic_category.lab), names_to="metabolite") %>%
+  filter(!is.na(genetic_category.lab)) %>%
+  ggplot(aes(x=genetic_category.lab, y=value, color=genetic_category.lab, fill=genetic_category.lab)) + 
+  facet_wrap(~metabolite, scales="free_y", nrow=2) + 
+  geom_boxplot() + 
+  scale_color_manual(values=c(palettes$NatMainAccent3$Level2[1:2]), name="PPS") + 
+  scale_fill_manual(values=paste0(c(palettes$NatMainAccent3$Level2[1:2]), "75"), name="PPS") + 
+  xlab("PPS Category") + ylab("incremental AUC") + 
+  theme_bw() + 
+  theme(legend.position = "none") + 
+  ggtitle("AUC Glucose and Insulin from 0 to 30, 60, 120, and 180 min")
+
+```
+
+## Nutrient PGS x Meal selection 
+
+
+
+#### End of preliminary analysis
+

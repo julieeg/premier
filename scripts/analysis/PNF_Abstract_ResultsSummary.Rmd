@@ -1,0 +1,503 @@
+---
+title: "PREMIER results for PNF Abstract"
+output: html_document
+theme: united
+date: "2025-01-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, fig.width = 10, fig.height = 5)
+
+#Load libraries
+library(Hmisc)
+library(tidyverse)
+library(data.table)
+library(devtools)
+library(ggpubr)
+library(knitr)
+
+# Load pantry "package"
+lapply(list.files("../../pantry/functions/", recursive = T, full.names = T), source)
+
+# Load data files
+analysis <- readRDS("../data/processed/premier_analysis.rda")
+
+# Set plot parameters
+parameters <- list(
+  total = list(label="Total cohort", palette=palettes$NatMainBackground2x2[1]),
+  genetic_category = list(label = "Genetic\nCategory", strata = "genetic_category.lab", levels=c("Prefer Carb", "Prefer Fat"), 
+                 palette = palettes$NatMainAccent3$Level2[1:2]),
+  meal_choice = list(label = "Meal\nSelection", strata="meal_choice", levels=c("High Carb", "High Fat"),
+                palette = c(palettes$NatExt$Oranges[3], palettes$NatExt$Greens[3])),
+  gene_x_meal = list(label = "Genetic Category&\nMeal Selection", strata="genetic_cat_x_meal_choice", 
+                     levels=c("Prefer Carb\nx High Carb", "Prefer Carb\nx High Fat", "Prefer Fat\nx High Carb", "Prefer Fat\nx High Fat"),
+                     palette = c(palettes$NatMainAccent3$Level3[1:2], palettes$NatMainAccent3$Level5[1:2])[c(1,3,4,2)])
+)
+
+```
+
+
+```{r}
+units <- c("", "_mmol")
+Units <- c("(mg/dL)", "(mmol/L)")
+
+unit=units[1]
+Unit=Units[1]
+```
+
+
+## Participant characteristics 
+#### Demographics, anthropometrics & fasting metabolites
+
+**By genetic category**
+```{r, echo=F, warning=F}
+rbind.data.frame(
+  fread("../output/tab_descr_demographics_genecat.csv", header = T),
+  fread("../output/tab_descr_metabolites_genecat.csv", header = T)) %>% 
+  kable("Table 1")
+```
+
+
+```{r, echo=F}
+## Write functions to plot mean (SE) postprandial & iAUC metabolite values
+#Spaghetti plot 
+plot_ppXtime_total <- function(metabolite, times = c(0,30,60,120,180), palette, data=analysis) {
+  palette=parameters$total$palette
+  y_label=paste(str_to_sentence(metabolite), Unit)
+  data %>% select(id, starts_with(paste0(metabolite, "_"))) %>%
+    rename_with(~gsub(metabolite, "x", .), starts_with(metabolite)) %>%
+    rename_with(., ~gsub("m", "", gsub("_log", "", .))) %>%
+    select(id, paste0("x_", times)) %>%
+    pivot_longer(-id, names_sep="_", names_to=c("metabolite", "time")) %>%
+    mutate(across(c("time", "value"), ~as.numeric(.))) %>%
+    ggplot(aes(x=time, y=value, group=id)) + 
+    scale_x_continuous(breaks=times) +
+    geom_vline(xintercept = times[1], color="black", linewidth=1.25) +
+    geom_line(alpha=0.55, color=palette) + 
+    stat_summary(aes(group = metabolite), geom = "point", fun = mean, size = 4, color=palette) + 
+    stat_summary(aes(group = metabolite), geom = "line", fun = mean, linewidth = 2, color=palette) + 
+    xlab("Time (minutes)") + ylab(y_label) + 
+    theme_bw() #
+}
+
+#Mean iAUC
+plot_iAUC_total <- function(metabolite, iAUC=120, iAUC_method=".pos", y_extend=c(0.2,0), data=analysis) {
+  metabolite_iAUC=paste0(metabolite,"_", iAUC, "iAUC", iAUC_method)
+  p<-data %>% select(id, y=metabolite_iAUC) %>%
+    reframe(n=length(y), mean=mean(y), sd=sd(y)) %>%
+    mutate(se=sd/sqrt(n), metabolite=metabolite) %>%
+    
+    ggplot(aes(x=metabolite, y=mean, ymin=mean-se, ymax=mean+se, fill=metabolite)) + 
+    geom_bar(stat="identity", width=0.65) + geom_errorbar(width=0.15) +
+    scale_fill_manual(values=parameters$total$palette) + 
+    xlab("All Participants") + ylab(paste(str_to_sentence(metabolite), Unit, "\n120-min iAUC")) + 
+    theme_bw() + theme(legend.position = "none", axis.text.x = element_blank())
+    ggplot_extend_ylim(p, y_max_extend=y_extend[1], y_extend[2])
+}
+```
+
+***
+
+##### Postprandial glucose & insulin, overall
+```{r, echo=F, fig.width=10, fig.height=8, warning=F}
+gluc_y_label=paste0("Glucose", Unit)
+insu_y_label=paste0("Insulin", Unit)
+
+plot_glu_total <- ggarrange(plot_ppXtime_total("glucose"), "", plot_iAUC_total("glucose"),
+                            nrow=1, widths=c(1.75, 0.1, 0.65))
+
+plot_insu_total <- ggarrange(plot_ppXtime_total("insulin"), "", plot_iAUC_total("insulin"),
+                            nrow=1, widths=c(1.75, 0.1, 0.65))
+
+ggarrange(plot_glu_total, plot_insu_total, nrow=2) #%>%
+  #ggsave(filename="../output/fig_postprandial_metab_total.pdf", height=3.5, width=8)
+```
+
+***
+
+##### Postprandial glucose & insulin, by genetic category
+```{r, echo=F, fig.width=10, fig.height=8}
+plot_ppXtime_strat <- function(metabolite, times = c(0,30,60,120,180), y_label, strata="genetic_category", data=analysis) {
+  palette=parameters[[strata]]$palette ; strata_var=parameters[[strata]]$strata
+  y_label=paste(str_to_sentence(metabolite), Unit)
+  data %>% select(id, starts_with(metabolite), strata=all_of(strata_var)) %>%
+    rename_with(~gsub(metabolite, "x", .), starts_with(metabolite)) %>%
+    rename_with(., ~gsub("m", "", gsub("_log", "", .))) %>%
+    select(id, strata, paste0("x_", times)) %>%
+    pivot_longer(-c(id, strata), names_sep="_", names_to=c("metabolite", "time")) %>%
+    mutate(across(c("time", "value"), ~as.numeric(.))) %>%
+    filter(!is.na(strata)) %>%
+    
+    ggplot(aes(x=time, y=value, group=id, color=strata)) + 
+    scale_x_continuous(breaks=times) +
+    geom_vline(xintercept = times[1], color="grey25", linewidth=1.55) +
+    geom_line(alpha=0.55) + 
+    scale_color_manual(values=c(parameters[[strata]]$palette), name=parameters[[strata]]$label) + 
+    stat_summary(aes(group = strata, color=strata), geom = "point", fun = mean, size = 4) + 
+    stat_summary(aes(group = strata, color=strata), geom = "line", fun = mean, linewidth = 2) + 
+    xlab("Time (minutes)") + ylab(y_label) + 
+    theme_bw()
+}
+
+ggarrange(plot_ppXtime_strat("glucose"), plot_ppXtime_strat("insulin"), common.legend = T, legend = "right")
+```
+
+##### Additional postprandial markers: iAUC glucose and insulin by genetic category
+```{r, echo=F, fig.height=6, fig.width=10, warning=F}
+iAUC_vars <- c(paste0(rep(c("glucose_", "insulin_"), each=4), rep(c("30", "60", "120", "180"), 2),  rep("iAUC.pos",8)))
+analysis %>% select(id, genetic_category.lab, iAUC_vars) %>%
+  pivot_longer(-c(id, genetic_category.lab), names_to="metabolite") %>%
+  filter(!is.na(genetic_category.lab)) %>%
+  mutate(time=gsub(".*[_]", "", gsub("iAUC.*", "min iAUC", metabolite))) %>%
+  mutate(Metabolite= str_to_sentence(gsub("[_].*", "", metabolite))) %>%
+  mutate(time=factor(time, levels=c(paste0(c(30, 60, 120, 180), "min iAUC")))) %>%
+  
+  ggplot(aes(x=genetic_category.lab, y=value, color=genetic_category.lab, fill=genetic_category.lab)) + 
+  facet_wrap(~Metabolite+time, scales="free_y", nrow=2) +
+  geom_boxplot(width=0.5, alpha=0.55) + 
+  scale_color_manual(values=parameters$genetic_category$palette, guide=F) + 
+  scale_fill_manual(values=parameters$genetic_category$palette, name=parameters$genetic_category$label) + 
+  xlab("Genetic Category") + ylab(paste0("incremental AUC", Unit)) + 
+  theme_bw() + theme(legend.position = "right", axis.text.x = element_blank()) + 
+  ggtitle("iAUC at 0 to 30, 60, 120, and 180 min")
+```
+
+
+***
+
+
+### Statistical Analyses (Aim 1a)
+#### *Mixed-Meal Tolerance Tests*
+
+Primary models:
+**Postprandial metabolites**: lmer(metabolite_Xmin ~ genetic_category.lab*time+age+sex+bmi+PC1+PC2+PC3+(1|id), data=analysis_long)
+
+- **data_format:** repeated measures (long) 
+- **primary_exposure:** genetic_category.lab - High Fat vs. High Carb (reference) 
+- **primary_outcome(s):** postprandial glucose and insulin (mg/dL) levels at 30, 60, 120, 180 minutes (compared to time 0)
+- **fixed effects:** age, sex, bmi, genetic PCs 1-3, time (categorical; reference = 0 for pp or 30 for iAUC) 
+- **random effects:** participant_id 
+- **interactions effects:** genetic_category.lab*time to check for differences between genetic categories at each time point, compared to time 0 
+
+**iAUC metabolites:** lm(metabolite_XiAUC ~ genetic_category.lab+age+sex+bmi+PC1+PC2+PC3+(1|id), data=analysis)
+
+- **data_format:** independent outcomes/no repeated measures (wide) 
+- **primary_exposure:** genetic_category.lab - High Fat vs. High Carb (reference) 
+- **primary_outcome(s):** iAUC glucose and insulin (mg/dL) at 30, 60, 120, 180 min calculated via trapezoid rule
+- **fixed effects:** age, sex, bmi, genetic PCs 1-3
+- **random effects:** participant_id 
+
+
+NOTE: "AdjTime0" model is the same as above, but additionally includes a fixed-effect term for glucose/insulin_0 
+
+##### Summary of postprandial glucose & insulin, by genetic category
+```{r, echo=F, fig.height=8, fig.width=10}
+plot_ppXtime_strat_summary <- function(metabolite, times = c(0,30,60,120,180), strata="genetic_category",data=analysis) {
+  strata_var=parameters[[strata]]$strata 
+  y_label=paste(str_to_sentence(metabolite), Unit, "\nmean \u00B1 SE")
+  data %>% select(id, starts_with(metabolite), strata=all_of(strata_var)) %>%
+    rename_with(~gsub(metabolite, "x", .), starts_with(metabolite)) %>%
+    rename_with(., ~gsub("m", "", gsub("_log", "", .))) %>%
+    select(id, strata, paste0("x_", times)) %>%
+    pivot_longer(-c(id, strata), names_sep="_", names_to=c("metabolite", "time")) %>%
+    mutate(across(c("time", "value"), ~as.numeric(.))) %>%
+    group_by(strata, time) %>% 
+    
+    reframe(n=n(), mean=mean(value, na.rm=T), sd=sd(value, na.rm=T)) %>%
+    mutate(se=sd/sqrt(n)) %>% filter(!is.na(strata)) %>%
+    
+    ggplot(aes(x=time, y=mean, ymin=mean-se, ymax=mean+se, group=strata, color=strata)) + 
+    scale_x_continuous(breaks=times) +
+    geom_vline(xintercept = times[1], color="grey25", linewidth=1.35) +
+    geom_line(alpha=0.85, position=position_dodge(10.5), linewidth=1) + 
+    geom_point(size=2.5, position=position_dodge(10.5)) +
+    geom_errorbar(width=8.25, linewidth=0.75, alpha=0.85, position=position_dodge(10.5)) +
+    scale_color_manual(values=parameters[[strata]]$palette, name=parameters[[strata]]$label) + 
+    xlab("Time (minutes)") + ylab(y_label) + 
+    theme_bw()
+}
+
+plot_iAUC_strat <- function(metabolite, iAUC=120, iAUC_method=".pos", y_extend=c(0.1,0), strata, data=analysis) {
+  strata_var=parameters[[strata]]$strata 
+  y_label=paste(str_to_sentence(metabolite), Unit, "\n120-min iAUC")
+  p<-data %>% select(id, starts_with(metabolite) & ends_with(paste0(iAUC,"iAUC", iAUC_method)), strata=all_of(strata_var)) %>%
+    rename_at(paste0(metabolite, "_", iAUC, "iAUC", iAUC_method), ~gsub(paste0("[_]", iAUC,"iAUC.*"), "", gsub(metabolite, "value", .))) %>%
+    group_by(strata) %>% filter(complete.cases(strata)) %>%
+    reframe(n=n(), mean=mean(value), sd=sd(value)) %>% mutate(se=sd/sqrt(n)) %>%
+    
+    ggplot(aes(x=strata, y=mean, ymin=mean-se, ymax=mean+se, fill=strata)) + 
+    geom_bar(stat="identity") + geom_errorbar(width=0.15) +
+    xlab("Genetic category") + ylab(y_label) + 
+    scale_fill_manual(values=parameters[[strata]]$palette, name=parameters[[strata]]$label) + 
+    theme_bw() + theme(axis.text.x = element_blank())
+    ggplot_extend_ylim(p, y_max_extend=y_extend[1], y_extend[2])
+}
+```
+
+```{r, echo=F, fig.height=8, fig.width=12}
+plot_glu_geno <- ggarrange(plot_ppXtime_strat_summary("glucose"), "", plot_iAUC_strat("glucose", strata="genetic_category"),
+                            nrow=1, widths=c(1.75, 0.1, 0.65), common.legend = T, legend = "right")
+
+plot_insu_geno <- ggarrange(plot_ppXtime_strat_summary("insulin"), "", plot_iAUC_strat("insulin", strata="genetic_category"),
+                            nrow=1, widths=c(1.75, 0.1, 0.65), common.legend = T, legend = "right")
+
+ggarrange(plot_glu_geno, plot_insu_geno, nrow=2, common.legend = T, heights=c(1, 1), align="hv") #%>%
+```
+
+##### Effect of genetic category on **postprandial** glucose & insulin responses to a standardized mixed meal
+```{r, echo=F}
+results_mmtt <- fread(paste0("../output/tab_result_lme_glycemic_mmtt_postprandial_allModels_v3",unit,".csv")) %>%
+  select(Meal.Type, Model, Outcome, Effect, Exposure, Beta.SE, P=P_signif, Anova.P=anovaP_signif) %>%
+  mutate(Effect=factor(Effect, levels=c("Main", "Main (joint)", "Interaction (joint)", "Interaction")))
+```
+
+```{r, echo=F}
+results_mmtt %>% #filter(grepl("Postprandial", Outcome)) %>%
+  pivot_wider(values_from=c(Beta.SE, P, Anova.P), names_from=Outcome) %>%
+  select(Model, Effect, Exposure, ends_with("Glucose"), ends_with("Insulin")) %>%
+  rename_all(~gsub("Postprandial ", "", .)) %>%
+  filter(!startsWith(Exposure, "Time")) %>%
+  filter(Model=="AdjTime0") %>%
+  mutate_all(., ~ifelse(is.na(.)==T | .=="NA (NA, NA)", "-", .)) %>%
+  kable(caption = "Summary table: lmer with random effect participant ID adjusting for time (main and interaction)")
+```
+
+
+##### Effect of genetic category on **iAUC** glucose/insulin responses to a standardized mixed meal
+**Model:** lm(metabolite_120iAUC ~ genetic_category.lab+age+sex+bmi+PC1+PC2+PC3, data=analysis)
+```{r, echo=F}
+fread(paste0("../output/tab_result_lm_glycemic_mmtt_iAUC_allModels_v3",unit,".csv")) %>%
+  mutate(Metabolite=str_to_sentence(gsub("[_].*", "", Outcome))) %>% 
+  mutate(Outcome=gsub(".*[_]", "", gsub("iAUC.*", "min iAUC", Outcome))) %>%
+  select(Meal.Type, Model, Effect, Metabolite, Outcome, Exposure, Beta.SE, P=P_signif, AnovaP=anovaP_signif) %>%
+  filter(Model == "AdjTime0") %>%
+  kable(caption="Model with adjustment for time 0, mixed-effects models, postprandial")
+``` 
+
+
+***
+
+## Self-Selected Meal Tolerance Test (Aim 2a)
+Note: For all postprandial tests, times are relative to the start of the test day (i.e., 235 min = time 0 for the second test)
+
+
+#### Demographics, anthropometrics & fasting metabolites
+**By meal selection**
+```{r, echo=F, warning=F}
+print_summary_table(
+      analysis, vars_to_summarize = c(meal_choice="Meal Selection"), p_adjust = "none", 
+      var_strata = "genetic_category.lab", var_strata_order = c("Prefer Carb", "Prefer Fat"),
+      p_types = "descriptive", p_smalln=T, factor_vars = "meal_choice")
+rbind.data.frame(
+      fread("../output/tab_descr_demographics_mealchoice.csv", header = T), 
+      fread("../output/tab_descr_metabolites_mealchoice.csv", header = T)) %>% 
+  kable()
+```
+
+Notes: 
+ - No demographic/descriptive differences between participants that chose either diet
+ - Statistically (and clinically) significant differences in blood lipids between meal selection groups: log(Tg) & LDL higher in high-fat > high-carb diet selection
+
+```{r, echo=F, warning=F, fig.width=6, fig.height=4}
+meal_choice.pal <- c(palettes$NatExt$Oranges[2], palettes$NatExt$Greens[2])
+p<-analysis %>% group_by(genetic_category.lab) %>%
+  filter(complete.cases(genetic_category.lab, meal_choice)) %>%
+  count(genetic_category.lab, meal_choice) %>%
+  ggplot(aes(x=genetic_category.lab, y=n, fill=meal_choice)) +
+  geom_bar(stat="identity", position="dodge") + 
+  scale_fill_manual(values=parameters$meal_choice$palette, name="Meal Choice") + 
+  theme_bw()+theme(axis.text.x=element_text(color = "black", face="bold")) + 
+  ylab("Frequency") + xlab("Genetic Category")
+ggplot_extend_ylim(p, y_max_extend = 0.1)
+```
+
+Note: This is **inverse** of expected: Participants who genetically "Prefer Carbs" tended to choose the High Fat meal, while those that genetically "Prefer Fat" tended to choose the High Carb meal
+
+
+```{r, echo=F}
+rbind.data.frame(fread(paste0("../output/tab_descr_postprandial",unit,"_mealchoice.csv"), header = T) %>%
+                   mutate(P_value=format_p_star(as.numeric(P_value))),
+                 fread(paste0("../output/tab_descr_iAUC",unit,"_mealchoice.csv"), header = T) %>%
+                   mutate(P_value=format_p_star(as.numeric(P_value)))) %>%
+  kable()
+```
+
+
+#### Postprandial glucose & insulin, by meal selection
+
+```{r, echo=F, fig.height=5, fig.width=10}
+ggarrange(plot_ppXtime_strat(metabolite = "glucose", times=c(235, 270, 300, 360), strata="meal_choice"), plot_ppXtime_strat(metabolite = "insulin", times=c(235, 270, 300, 360), strata="meal_choice"),
+          common.legend = T, legend = "right")
+```
+
+```{r, echo=F, fig.width=10, fig.height=8}
+plot_glu_meal <- ggarrange(plot_ppXtime_strat_summary("glucose", times=c(235,270,300,360), strata = "meal_choice"), "", 
+                           plot_iAUC_strat("glucose", strata = "meal_choice", iAUC=360),
+                            nrow=1, widths=c(1.75, 0.1, 0.65), common.legend = T, legend = "right")
+
+plot_insu_meal <- ggarrange(plot_ppXtime_strat_summary("insulin", times=c(235,270,300,360), strata = "meal_choice"), "", 
+                            plot_iAUC_strat("insulin", strata = "meal_choice", iAUC=360),
+                            nrow=1, widths=c(1.75, 0.1, 0.65), common.legend = T, legend = "right")
+
+ggarrange(plot_glu_meal, plot_insu_meal, nrow=2, common.legend = T, legend = "bottom", heights=c(1, 1.15)) 
+```
+
+ 
+### Statistical Analyses (Aim 1b)
+#### *Self-Selected Meals (High Carb vs. High Fat)*
+
+All analyses were performed **stratified** by genotype or meal choice group
+
+**Postprandial metabolites**: lmer(metabolite_Xmin ~ genetic_category.lab*time+age+sex+bmi+PC1+PC2+PC3+(1|id)+meal_choice, data=analysis_long)
+
+- **data_format:** repeated measures (long) 
+- **primary_exposure:** genetic_category.lab - High Fat vs. High Carb (reference) & meal_choice -High Fat vs. High Carb (reference)
+- **primary_outcome(s):** postprandial glucose and insulin (mg/dL) levels at 270, 300, 260 minutes (compared to 235 min [i.e., time 0])
+- **fixed effects:** age, sex, bmi, genetic PCs 1-3
+- **random effects:** participant_id 
+- **interactions effects:** genetic_category.lab*meal_choice to check for differences in genetic category effect for each meal choice
+-**ALTERNATIVE interaction effects:* 4-level categorical variale for genetic_cat_x_meal_choice
+
+**iAUC metabolites:** lm(metabolite_XiAUC ~ genetic_category.lab*meal_choice+age+sex+bmi+PC1+PC2+PC3+(1|id), data=analysis)
+
+- **data_format:** independent outcomes/no repeated measures (wide) 
+- **primary_exposure:** genetic_category.lab - High Fat vs. High Carb (reference) & meal_choice -High Fat vs. High Carb (reference)
+- **primary_outcome(s):** iAUC glucose and insulin (mg/dL) at 270, 300, 360 min calculated via trapezoid rule
+- **fixed effects:** age, sex, bmi, genetic PCs 1-3
+- **random effects:** participant_id 
+
+NOTE: "AdjTime0" model is the same as above, but additionally includes a fixed-effect term for glucose/insulin_235 
+
+##### Postprandial glucose & insulin, by genetic category & meal selection
+```{r, echo=F, fig.height=8, fig.width=10}
+plot_glu_geneXmeal <- ggarrange(plot_ppXtime_strat_summary("glucose", times=c(235,270,300,360), strata="gene_x_meal"), "",
+                                plot_iAUC_strat("glucose", iAUC=360, strata="gene_x_meal"), 
+                                nrow=1, widths=c(1.75, 0.1, 0.75), common.legend = T, legend = "right")
+plot_insu_geneXmeal <- ggarrange(plot_ppXtime_strat_summary("insulin", times=c(235,270,300,360), strata="gene_x_meal"), "",
+                                plot_iAUC_strat("insulin", iAUC=360, strata="gene_x_meal"), 
+                                nrow=1, widths=c(1.75, 0.1, 0.75), common.legend = T, legend = "right")
+ggarrange(plot_glu_geneXmeal, plot_insu_geneXmeal, nrow=2, legend = "right", heights=c(1, 1.15)) 
+```
+
+```{r, echo=F}
+results_selected <- fread(paste0("../output/tab_result_lme_glycemic_selected_postprandial_allModels_v3",unit,".csv")) %>%
+  select(Strata, Level, Model, Outcome, Effect, Exposure, Beta.SE, P=P_signif, Anova.P=anovaP_signif)
+```
+
+#### Effect of genetic category on **postprandial** glucose & insulin responses to a self-selected meal
+**Model(s):** Main & interaction effects LME model
+
+**Genetic effect on postprandial responses to self-selected meal (stratified by meal choice)**
+```{r}
+results_selected %>% 
+  filter(Strata=="Meal Choice") %>%
+  filter(!startsWith(Exposure, "Time"), !startsWith(Exposure, "Glucose"), !startsWith(Exposure, "Insulin")) %>%
+  filter(Model == "AdjTime0") %>%
+  arrange(Level) %>%
+  select(-Strata, -Model) %>%
+  mutate_all(., ~ifelse(is.na(.)==T | .=="NA (NA, NA)", "-", .)) %>%
+  kable(caption="Stratified by Meal Choice, model adjusting for time0, postprandial glycemic traits")
+```
+
+**Meal choice effect, for different genotypes, on postprandial responses to self-selected meal (stratified by genetic category)**
+```{r}
+results_selected %>% 
+  filter(Strata=="Genetic Category") %>%
+  filter(!startsWith(Exposure, "Time"), !startsWith(Exposure, "Glucose"), !startsWith(Exposure, "Insulin")) %>%
+  filter(Model == "AdjTime0") %>%
+  arrange(Level) %>%
+  select(-Strata, -Model) %>%
+  mutate_all(., ~ifelse(is.na(.)==T | .=="NA (NA, NA)", "-", .)) %>%
+  kable(caption="Stratified by Meal Choice, model adjusting for time0, postprandial glycemic traits")
+```
+
+#### Effect of genetic category on **iAUC** glucose & insulin responses to a self-selected meal
+
+**Model(s):** lm(metabolite_iAUC~genetic_category+age+sex+PC1+PC2+PC3+meal_choice+[metabolite_235], data=analysis)
+```{r}
+fread(paste0("../output/tab_result_lm_glycemic_selected_iAUC_allModels_v3",unit,".csv")) %>%
+  mutate(Metabolite=str_to_sentence(gsub("[_].*", "", Outcome))) %>% 
+  mutate(Outcome=gsub(".*[_]", "", gsub("iAUC.*", "min iAUC", Outcome))) %>%
+  filter(Strata=="Meal Choice") %>%
+  filter(!startsWith(Exposure, "Time"), !startsWith(Exposure, "Glucose"), !startsWith(Exposure, "Insulin")) %>%
+  filter(Model == "AdjTime0") %>%
+  arrange(Level) %>%
+  select(Model, Level, N, Metabolite, Outcome, Exposure, Beta.SE, P=P_signif, AnovaP=anovaP_signif) %>%
+  mutate_all(., ~ifelse(is.na(.)==T | .=="NA (NA, NA)", "-", .)) %>%
+  kable()
+```
+
+```{r}
+fread(paste0("../output/tab_result_lm_glycemic_selected_iAUC_allModels_v3",unit,".csv")) %>%
+  mutate(Metabolite=str_to_sentence(gsub("[_].*", "", Outcome))) %>% 
+  mutate(Outcome=gsub(".*[_]", "", gsub("iAUC.*", "min iAUC", Outcome))) %>%
+  filter(Strata=="Genetic Category") %>%
+  filter(!startsWith(Exposure, "Time"), !startsWith(Exposure, "Glucose"), !startsWith(Exposure, "Insulin")) %>%
+  filter(Model == "AdjTime0") %>%
+  arrange(Strata) %>%
+  select(Model, Level, N, Metabolite, Outcome, Exposure, Beta.SE, P=P_signif, AnovaP=anovaP_signif) %>%
+  kable()
+```
+
+## Summary of Primary Results
+
+**Participant characteristics:**
+
+- 22 total participants (63% female; mean/SD BMI = 34.9/3.3 kgm2; predominantly Non-hispanic/White)
+- 12 (54%) Prefer Carb; 10 (45%) Prefer Fat
+- Similar age, sex, BMI and fasting metabolites (glucose, insulin, lipids) between genetic preference groups
+
+**In Mixed-Meal Tolerance Tests (MMTTs): **
+
+- There were **significant differences in 120 min iAUC glucose**, but not insulin, between genetic preference groups, with the Carb Preference genotype associating with lower iAUC glucose than the Fat preference genotype
+- 30, 60 and 180 min iAUC glucose were also significantly higher among the Prefer Fat genotype than Prefere Carb genotype.
+- For postprandial levels, we found significant genotype x time effects at 60 minutes for glucose and insulin (Glucose: Prefer Fat [vs. Prefer Carb] x Time [60 min vs. 0 min], Beta = 20.2; 95% CI:3.4 37.0; P=0.021). However, there were no significant joint effects of genetic category x time for either metabolite (P, joint interaction = 0.08) 
+
+
+**Self-Selected Meals:**
+
+- Genetic preference did not significantly predict meal selections (P=0.19) though individuals genetically predisposed to Prefer Carb, tended to choose the High Fat meal(66.7%) while those that were predisposed to prefer Fat tended to chose the High Carb meal (70%).
+- We found significant joint-effects of a 4-way interaction term (4-levels; genetic category & meal choice) on 270 (i.e., 30min ), 300 (i.e., 60 min) and 360 (i.e., 120 min) glucose iAUC (P=0.023, 0.016, 0.025, respectively), with significantly *lower* iAUC glucose for the Prefer Carb x High Fat group compared to Prefer Carb x High Carb group (**i.e., the discordant individuals, had lower postprandial glucose levels than the concordant individuals...**)
+- When using a 2*2 interaction term (2x2 levels: genetic_category x meal_choice), we found no signifcant joint effects, although there were significant between-group differences in 270, 300
+
+***
+
+
+## Sensitivity Analyses
+
+##### Examine beta cell indices: Matsuda
+```{r}
+fread("../output/tab_result_lm_indices_selected_v3.csv") %>% 
+  select(outcome, model, exposure, n, Beta.SE, P=P_signif, anovaP_signif) %>%
+  kable()
+```
+
+#### Sex-stratified analyses
+```{r}
+fread(paste0("../output/tab_result_lm_glycemic_selected_pp_sensitivity_sex_v3",unit,".csv")) %>%
+  filter(Sex=="Female") %>%
+  select(Sex, Outcome, Exposure, Effect, Beta.SE, P=P_signif, anovaP_signif=anovaP_signif) %>%
+  kable()
+
+fread(paste0("../output/tab_result_lm_glycemic_selected_iAUC_sensitivity_sex_v3",unit,".csv")) %>%
+  filter(Sex=="Female") %>%
+  select(Sex, Outcome, Exposure, N, Beta.SE, P=P_signif, anovaP_signif=anovaP_signif) %>%
+  kable()
+```
+
+```{r}
+fread(paste0("../output/tab_result_lm_glycemic_selected_pp_sensitivity_sex_v3",unit,".csv")) %>%
+  filter(Sex=="Male") %>%
+  select(Sex, Outcome, Exposure, Effect, Beta.SE, P=P_signif, anovaP_signif=anovaP_signif) %>%
+  kable()
+
+fread(paste0("../output/tab_result_lm_glycemic_selected_iAUC_sensitivity_sex_v3",unit,".csv")) %>%
+  filter(Sex=="Male") %>%
+  select(Sex, Outcome, Exposure, N, Beta.SE, P=P_signif, anovaP_signif=anovaP_signif) %>%
+  kable()
+```
+
+ 
+ 
+End of analyses
+
