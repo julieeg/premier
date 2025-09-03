@@ -13,6 +13,15 @@ library(readxl)
 lapply(list.files("../../pantry/functions/", recursive = T, full.names = T), source)
 
 
+## CHOOSE UNITS FOR DATA PREPARATION (mg/dL or mmol/L)
+
+units <- c("", "_mmol")
+Units <- c("mg/dL", "mmol/L")
+
+unit<-units[1] # ""
+Unit<-Units[1] # mg/dL
+
+
 ##########################
 ## Build base dataframe ##
 ##########################
@@ -71,14 +80,15 @@ rody <- readxl::read_xlsx("../data/raw/Eligible.RODY.extremes_PREMIER.xlsx") %>%
 
 
 #Re-calculated genetic category data
-genetic_category <- fread("../data/processed/genetic_category_20250212.csv") %>%
+genetic_category <- fread("../data/raw/genetic_category_20250212.csv") %>%
   mutate_at("Subject.ID", ~as.character(.))
 
 
 #Additional premier participant IDs pulled from mgbb 
-addn_mgbb<-fread("../data/processed/addn_premier_subjectIDs_20250209.csv") %>% 
+addn_mgbb<-fread("../data/raw/addn_premier_subjectIDs_20250209.csv") %>% 
   select(Subject.ID, MRN) %>% 
   mutate(across(c("MRN", "Subject.ID"), ~as.character(.)))
+
 
 #Meal selection data
 meal_choice<-readxl::read_xlsx("../data/raw/PREMIER_Meal_Data.xlsx") %>% 
@@ -86,6 +96,7 @@ meal_choice<-readxl::read_xlsx("../data/raw/PREMIER_Meal_Data.xlsx") %>%
   filter(!is.na(id))
 meal_choice %>% print(n=30) # NOTE: two participant IDs missing; match using initials
 meal_choice %>% filter(id=="Not provided") #Initials == BB & BG
+
 #check which participants have missing meal_choice data
 allbase.dat$study_id[which(!allbase.dat$study_id %in% meal_choice$id)] # P11 & P23
 names_mrn.dat %>% filter(id %in% c("P11", "P23")) #P11=BB; P23=BG
@@ -111,7 +122,7 @@ meal_data <- inner_join(meal_data_mmtt, meal_data_selected, by = "id")
 # ==================================================================
 
 #Genetic ancestry PCs
-genetic_pcs<-fread("../data/processed/MGBB.64K.Genetic_Ancestry_premier.txt") %>%
+genetic_pcs<-fread("../data/raw/MGBB.64K.Genetic_Ancestry_premier.txt") %>%
   select(Subject.ID=`Biobank Subject ID`, paste0("PC", 1:5)) %>%
   mutate(Subject.ID=as.character(Subject.ID))
 
@@ -127,7 +138,7 @@ survey_vars <- c(
   sleep_hrday="Total average sleep duration in hours per day"
 )
 
-survey_data<-fread("../data/processed/mgbb_phenos_premier.txt") %>%
+survey_data<-fread("../data/raw/mgbb_phenos_premier.txt") %>%
   select(Subject.ID=id, all_of(survey_vars)) %>%
   mutate(Subject.ID=as.character(Subject.ID)) %>%
   mutate_all(., ~ifelse(.=="", NA, .)) %>%
@@ -252,8 +263,7 @@ do.call(rbind.data.frame, lapply(cat_descr_vars, function(x) {
 processed.dat <- processed.dat %>% 
   mutate(Race2=case_when(Race == "White" | Race == "Black" | 
                            Race == "Other" ~ Race,
-                         TRUE ~ as.character(NA))
-  ) %>% 
+                         TRUE ~ as.character(NA))) %>% 
   mutate(RaceEthn = paste0(Ethnicity, " ", Race2))
 
 
@@ -283,62 +293,93 @@ processed.dat <- processed.dat %>%
   mutate(tg_log = log(tg),
          tg_log_120 = log(tg_120),
          tg_log_235 = log(tg_235),
-         tg_log_360 = log(tg_360),
-         tot_bilirubin_log = log(tot_bilirubin),
-         dir_bilirubin_log = log(dir_bilirubin),
-         alt_log = log(alt))
+         tg_log_360 = log(tg_360)
+         )
 
-cont_metabolite_log_vars <- c("tg_log", "tot_bilirubin_log", "dir_bilirubin_log", "alt_log")
-plots_metab_log.l <- lapply(cont_metabolite_log_vars, function(var) plot_continuous(var, data=processed.dat))
+plots_metab_log.l <- lapply(paste0("tg_log",c("","_120","_235","_360")), function(var) plot_continuous(var, data=processed.dat))
 ggarrange(plotlist = plots_metab_log.l)
-
-
-#Blood cell metabolites 
-cont_blood_vars <- c("platelet_count", "mpv", "neutrophils", "lymphocytes", "monocytes", "eosinophils", "basophils")
-plots_bloodcell.l <- lapply(cont_blood_vars, function(var) plot_continuous(var, data=processed.dat))
-ggarrange(plotlist = plots_bloodcell.l)
 
 
 # =======================================================================
 ## Add delta bm variables for all combinations (iAUC)
-## iAUC: 0-30, 0-60, 0-120, 0-180;  
+## iAUC: 0-30, 0-60, 0-120, 0-180
+# Trapezoidal rule: ((height1+height2)/2 x width1[time])
 # =======================================================================
 
-calc_auc <- function(metab, data=.) { 
-  auc<-processed.dat %>% select(starts_with(metab)) %>%
-    #MMTT
-    rename_all(., ~gsub(metab, "x", .)) %>%
-    mutate(x_30auc=((30-0)*(x+x_30))/2) %>%
-    mutate(x_60auc=x_30auc + ((60-30)*(x_30+x_60))/2) %>%
-    mutate(x_120auc=x_60auc + ((120-60)*(x_60+x_120))/2) %>%
-    mutate(x_180auc=x_120auc + ((180-120)*(x_120+x_180))/2) %>%
-    mutate(x_30iauc=((30-0)*(x_30-x))/2) %>%
-    mutate(x_60iauc=x_30iauc + ((60-30)*((x_60-x)+(x_30-x)))/2) %>%
-    mutate(x_120iauc=x_60iauc + ((120-60)*((x_120-x)+(x_60-x)))/2) %>%
-    mutate(x_180iauc=x_120iauc + ((180-120)*((x_180-x)+(x_120-x)))/2) %>%
-    
-    #self-selected meals
-    mutate(x_270auc=((270-235)*(x_270+x_235))/2) %>%
-    mutate(x_300auc=x_270auc + ((300-270)*(x_270+x_300))/2) %>%
-    mutate(x_360auc=x_300auc + ((360-300)*(x_360+x_300))/2) %>%
-    mutate(x_270iauc=((270-235)*(x_270-x_235))/2) %>%
-    mutate(x_300iauc=x_270iauc + ((300-270)*((x_300-x_235)+(x_270-x_235)))/2) %>%
-    mutate(x_360iauc=x_300iauc + ((360-300)*((x_360-x_235)+(x_300-x_235)))/2) %>%
-    
-    rename_all(., ~gsub("x", metab, .)) %>%
-    select(ends_with("auc") | ends_with("AUC"))
-  
-  return(auc)
-  }
+## calculate iAUC using calcAUC
+devtools::install_github("scrs-msu/auctime")
+library(auctime)
+
+make_iAUC <- function(metab, method, data) { 
+  times.l <- list(x_30iAUC=c(0,30), 
+                  x_60iAUC=c(0,30,60), 
+                  x_120iAUC=c(0,30,60,120), 
+                  x_180iAUC=c(0,30,60,120,180),
+                  x_235iAUC=c(0,30,60,120,180,235),
+                  x_270iAUC=c(235,270), 
+                  x_300iAUC=c(235,270,300),
+                  x_360iAUC=c(235,270,300,360)
+                  )
+  tag<-ifelse(method=="positive", ".pos", ifelse(method=="net", ".net", ""))
+  AUC <- lapply(1:length(times.l), function(t) {
+    calcAUC(data %>% select(subjects=id, c(paste0(metab, "_", times.l[[t]]))),
+            biomarker=metab, method=method, subjects = T, interval = "minutes", 
+            plot=T)$dataframe %>% as.data.frame() %>%
+      rename_all(., ~gsub("x[_]", "", gsub("AUC", paste0(names(times.l)[t],tag), .)))
+  }) %>% reduce(full_join,by="Subject") %>%
+    rename(id=Subject) %>%
+    mutate(across(contains("iAUC"), ~as.numeric(.)))
+  AUC
+}
 
 processed.dat <- processed.dat %>% 
-  mutate(calc_auc("glucose"),
-         calc_auc("insulin")
-  )
+  left_join(make_iAUC("glucose", method="positive", data=.), by="id") %>%
+  left_join(make_iAUC("glucose", method="net", data=.), by="id") %>%
+  left_join(make_iAUC("insulin", method="positive", data=.), by="id") %>%
+  left_join(make_iAUC("insulin", method="net", data=.), by="id")
+ 
+# =======================================================================
+## Calculate beta cell indices
+# =======================================================================
 
+## Calculate HOMA-IR & HOMA-B
+processed.dat <- processed.dat %>% mutate(
+  homair = (insulin*glucose)/405,
+  homab = ifelse(glucose <63, NA, (360*insulin)/(glucose-63))
+)
+
+
+# =======================================================================
+## Re-code genotype & meal type
+# =======================================================================
+
+# Rename as analysis
 analysis <- processed.dat
-saveRDS(processed.dat, "../data/processed/premier_analysis.rda")
+
+analysis <- analysis %>% 
+  mutate(genotype = case_when(genetic_category.lab=="Prefer Carb" ~ "HC genotype",
+                              genetic_category.lab=="Prefer Fat" ~ "HF genotype")) %>%
+  mutate_at("meal_choice", ~case_when(.=="High Carb" ~ "HC meal",
+                                      .=="High Fat" ~ "HF meal")) %>%
+  mutate_at("genetic_cat_x_meal_choice", ~
+              gsub("Prefer Carb", "HC genotype", gsub("Prefer Fat", "HF genotype", gsub(
+                "High Carb", "HC meal", gsub("High Fat", "HF meal", .))))) %>%
+  mutate(genotype=factor(genotype, levels=c("HF genotype", "HC genotype"))) %>%
+  filter(!is.na(genotype))
+
+
+dim(analysis) #22 186
+saveRDS(analysis, "../data/processed/premier_analysis.rda")
+
+
+# =======================================================================
+## Make dataframe in mmol/L & revise coding of genotype & meals
+# =======================================================================
+
+analysis_mmol<-analysis %>% mutate(across(starts_with(c("glucose")), ~./18))
+#saveRDS(analysis_mmol, "../data/processed/premier_analysis_mmol.rda")
 
 
 #EOF
+
 

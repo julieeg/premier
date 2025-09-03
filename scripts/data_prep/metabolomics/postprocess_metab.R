@@ -26,7 +26,7 @@ analysis2 <- left_join(
 met_info <- fread("../data/processed/met_info.csv") %>%
   mutate(Compound = gsub("_.*", "", Compound_Id), .after="Compound_Id")
 metabolites <- names(analysis2 %>% select(starts_with("HMDB")))
-metabclass <- fread("../data/raw/metabolomics/metabolites_subclasses.csv") %>%
+metabclass <- fread("../data/processed//metabolites_subclasses.csv") %>%
   rename(HMDB=HMDBID)
 
 ## load external metabolomics data dictionary: RefMet
@@ -50,8 +50,6 @@ lme_metab_mmtt_timeonly <- lapply(1:length(metabolites), function(m) {
     mutate(outcome=metab) 
 }) %>% do.call(rbind.data.frame, .) ; lme_metab_mmtt_timeonly
 
-#lme_metab_mmtt_timeonly %>% fwrite("../data/processed/tab_result_lme_metab_mmtt_timeonly.csv")
-#lme_metab_mmtt_timeonly <- fread("../data/processed/tab_result_lme_metab_mmtt_timeonly.csv")
 
 # ================================================================
 ## Select metabolites with duplicates across measurement types 
@@ -69,19 +67,20 @@ metabolites_dup.keep <- lapply(metabolites_dup, function(metab) {
      filter(Exposure == "Time_(joint)") %>%
      filter(startsWith(outcome, metab)) %>%
      arrange(anovaP) %>% pull(outcome))[1]
-}) %>% do.call(rbind, .)
+  }) %>% do.call(rbind, .)
 
-## Select the *top* metabolites for duplicates (strongest ANOVA P-value for change/time ^^)
+## Identify *top* metabolites among duplicates (strongest ANOVA P-value for change/time ^^)
 metabolites_unq <- analysis2 %>% select(-(starts_with(metabolites_dup) & !starts_with(metabolites_dup.keep))) %>% 
   select(starts_with("HMDB")) %>% names()
 
-# Drop source flag from metabolite name
+# Remove duplicate metabolites & drop source flag from metabolite name
 analysis2 <- analysis2 %>% select(!starts_with("HMDB") | starts_with(metabolites_unq)) %>%
   rename_with(., ~gsub("_.*", "", .), starts_with("HMDB"))
 
-# Update metabolomics info to exclude duplicates
+# Update metabolomics info to exclude duplicates & shorten names with "a OR b"
 met_info <- met_info %>% filter(HMDB_Id %in% metabolites_unq) %>%
-  mutate(HMDB = gsub("_.*", "", HMDB_Id))
+  mutate(HMDB = gsub("_.*", "", HMDB_Id)) %>%
+  mutate_at("Name", ~gsub(" or .*", "", .))
 
 metabolites <- analysis2 %>% select(starts_with("HMDB")) %>% names() ; length(metabolites) # 677
 
@@ -96,8 +95,8 @@ metabolites_pp <- lme_metab_mmtt_timeonly %>% filter(p<0.05) %>% pull(outcome) %
 length(metabolites_pp) #N=401
 
 # Write .csv 
-lme_metab_mmtt_timeonly %>% 
-  fwrite("../data/processed/tab_prelim_lme_metab_mmtt_timeonly.csv")
+lme_metab_mmtt_timeonly %>% fwrite("../data/processed/tab_prelim_lme_metab_mmtt_timeonly.csv")
+lme_metab_mmtt_timeonly %>% fwrite("../output/tab_res_mmtt_metab_timeonly.csv")
 
 ## Save list of metabolites -------------
 as.data.frame(metabolites) %>% fwrite("../data/processed/metbolites.txt", row.names = F)
@@ -112,4 +111,10 @@ table(analysis$has_metabolomics) # 0=5; 1=17
 analysis2 <- analysis2 %>% mutate(has_metabolomics = ifelse(id %in% metabolomics_ids,1,0))
 saveRDS(analysis2, "../data/processed/premier_analysis2.rda")
 
+## Save updated met_info as dictionary
+met_info %>% 
+  rename(method=Method) %>%
+  mutate(Method = case_when(method == "cn" ~ "C18-neg", method == "cp" ~ "C18-pos",
+                            method == "hn" ~ "HILIC-neg", method == "hp" ~ "HILIC-pos")) %>%
+  fwrite("../data/processed/met_info_processed.csv")
 

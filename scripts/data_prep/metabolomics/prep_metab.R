@@ -236,6 +236,7 @@ PCAPlot <- function(df, color_var, n_PC, title="") {
           mapping = aes(color = color_var),
           legend  = c(2,1) ) + labs(color="legend_title") + ggtitle(title)
 }
+
 rm0VarRows <- function(df) {
   rows2keep <- rowVars(df, na.rm=T) > 0
   rows2keep[is.na(rows2keep)] <- FALSE
@@ -466,7 +467,7 @@ info <- met_info[, c("Compound_Id","Name", "HMDB_Id")]
 data <- merge(info, merged_df, by = "Compound_Id" )
 
 #Write the files
-#data %>% fwrite("../data/processed/no_batch_adj/plasma/merged_data/inv_norm_merged_QCd_plasma.csv")
+data %>% fwrite("../data/processed/no_batch_adj/plasma/merged_data/inv_norm_merged_QCd_plasma.csv")
 
 ## Selecting only known metabolites
 selected_rows <- data[!is.na(HMDB_Id) & HMDB_Id!="NA",]
