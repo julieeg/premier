@@ -36,6 +36,7 @@ library(RefMet)
 metab_dict <- refmet_map_df(gsub("_.*", "", metabolites))
 metab_dict %>% fwrite("../data/processed/met_dictionary.csv")
 
+
 ###############################################################################
 ## Descriptive statistics for metabolites
 ###############################################################################
@@ -88,7 +89,7 @@ effective_tests #23
 ## Restricting to postprandial metabolites
 # =========================================================
 
-lme_metab_mmtt_unadj <- lapply(1:length(metabolites), function(m) {
+lme_metab_mmtt_geno <- lapply(1:length(metabolites), function(m) {
   metab <- metabolites[m]
   Metabolite <- met_info$Name[met_info$HMDB == metab][1] 
   run_lme(exposure = "genotype", outcome=metab, 
@@ -101,15 +102,15 @@ lme_metab_mmtt_unadj <- lapply(1:length(metabolites), function(m) {
   }) %>% do.call(rbind.data.frame, .)
 
 ## Save as .csv
-#lme_metab_mmtt_unadj %>% fwrite("../output/tab_res_mmtt_metab_genoEffect.csv")
-lme_metab_mmtt_unadj <- fread("../output/tab_res_mmtt_metab_genoEffect.csv")
+#lme_metab_mmtt_geno %>% fwrite("../output/tab_res_mmtt_metab_genoEffect.csv")
+lme_metab_mmtt_geno <- fread("../output/tab_res_mmtt_metab_genoEffect.csv")
 
 
 ## Run additional sensitivity analyses in demographics & bmi-adjusted models
 models <- list(primary="age+sex+PC1z+PC2z+PC3z+genotype*time",
                bmi="age+sex+PC1z+PC2z+PC3z+genotype*time+bmi")
 
-lme_metab_postprand_mmtt_adj <- do.call(rbind.data.frame, lapply(1:2, function(mod) {
+lme_metab_mmtt_genoadj <- do.call(rbind.data.frame, lapply(1:2, function(mod) {
   lapply(1:length(metabolites), function(m) {
     metab <- metabolites[m]
     Metabolite <- met_info$Name[met_info$HMDB == metab][1]
@@ -123,8 +124,8 @@ lme_metab_postprand_mmtt_adj <- do.call(rbind.data.frame, lapply(1:2, function(m
   arrange(outcome, model) ; lme_metab_postprand_mmtt_adj
 
 # Save as .csv
-#lme_metab_postprand_mmtt_adj %>% fwrite("../output/tab_res_mmtt_metab_genoEffect_adj.csv")
-lme_metab_postprand_mmtt_adj <- fread("../output/tab_res_mmtt_metab_genoEffect_adj.csv")
+#lme_metab_mmtt_genoadj %>% fwrite("../output/tab_res_mmtt_metab_genoEffect_adj.csv")
+lme_metab_mmtt_genoadj <- fread("../output/tab_res_mmtt_metab_genoEffect_adj.csv")
 
 
 ################################################################################
@@ -173,9 +174,10 @@ signif_metabs.l <- lapply(genotypes, function(g) {
 
 
 ### Extract metabolite list for common metabolites in ALL participants
-dir.create("../data/processed/pathways/metab_pEff_log2fc05")
+#dir.create("../data/processed/pathways/metab_pEff_log2fc05")
 
 lme_metab_mmtt_timeonly <- fread("../output/tab_res_mmtt_metab_timeonly.csv")
+
 lapply(c("120", "235"), function(time) {
   lme_metab_mmtt_timeonly %>% filter(Exposure == paste0("Time_",time) & 
                                      p<0.05/23 & abs(beta/log(2))>0.5) %>% pull(outcome) %>% #length()
@@ -204,8 +206,8 @@ metab_suppl_info <- full_join(fread("../data/processed/met_info_processed.csv"),
   select(Method, Compound, MZ, RT, Name, HMDB, Exposure, Beta.95CI, P) %>%
   pivot_wider(names_from = "Exposure", values_from=c(Beta.95CI, P)) %>%
   arrange(P_Time_120) %>%
-  mutate(P_signif=ifelse(P_Time_120 < 0.05/23 | P_Time_235 < 0.05/23,1,0)) %>%
-  fwrite("../output/tab_res_mmtt_metab_ppwithdescr.csv")
+  mutate(P_signif=ifelse(P_Time_120 < 0.05/23 | P_Time_235 < 0.05/23,1,0)) #%>%
+  #fwrite("../output/tab_res_mmtt_metab_ppwithdescr.csv")
 
 
 # ===============================================================================================
@@ -240,8 +242,8 @@ lme_metab_mmtt_bygeno %>% filter(outcome %in% names(bileacids_all)) %>%
   arrange(p)
 
 ## Write object of bileacids
-list(all=bileacids_all, abbrev=bileacids_all_abbrev) %>%
-  saveRDS("../data/processed/bileacids.rda")
+list(all=bileacids_all, abbrev=bileacids_all_abbrev) #%>%
+  #saveRDS("../data/processed/bileacids.rda")
 
 # ===========================================================
 ## Calculate 120 min fold change for bile acid metabolites
@@ -373,8 +375,22 @@ ba_clinvars_corr %>% arrange(p) %>% filter(endsWith(ba,"fc")) %>% filter(p<0.3)
 #ba_clinvars_corr %>% fwrite("../output/tab_res_ba_clinvars_pearson.csv")
 
 
+## Stratified by genotype ??
+
+ba_clinvars_corr_bygeno <- lapply(genotypes, function(g) {
+  lapply(exposures, function(x) {
+    X <- met_info$Name[met_info$HMDB==gsub("_.*", "", x)][1]
+    lapply(c(yvars), function(y) {
+      cor <- cor.test(ba %>% filter(genotype ==g) %>% pull(x), ba %>% filter(genotype ==g) %>% pull(y))
+      cbind.data.frame(Geno=g, BA=X, ba=x, y=y, cor=cor$estimate, p=cor$p.value, lowci=cor$conf.int[[1]], upci=cor$conf.int[[2]])
+    }) %>% do.call(rbind.data.frame, .) 
+  })  %>% do.call(rbind.data.frame, .) %>% unique()
+}) %>% do.call(rbind.data.frame, .) ; ba_clinvars_corr_bygeno
+ba_clinvars_corr_bygeno %>% arrange(p) %>% filter(endsWith(ba,"fc")) %>% filter(p<0.3)
+
+
 # ==========================================================================================
-## Mediation analysis: test whether BA explain any of the genotype --> glucose/insulin assoc.
+## TEMPORARY: Mediation analysis: test whether BA genotype --> glucose/insulin assoc.
 # ==========================================================================================
 
 ## Test mediation framework by calculating Percent Direct/Mediated Effects
@@ -393,7 +409,6 @@ med2 <- mediate(mA, mB, treat="genotype", treat.value = "HF genotype", control.v
 summary(med2)
 
 ## --> no significant, or tend, of mediated effect of total BA on glucose/insulin at 60
-
 
 # test for mediation of 120fc total BA for genotype on glucose/insulin 120 min AUC
 mA <- lm(totalBA_120fc~genotype+age+sex+PC1z+PC2z+PC3z, data=ba)
@@ -435,13 +450,15 @@ lme_metab_ssmt_timeonly <- lapply(meals, function(meal) {
   dplyr::select(genotype, meal_type, Exposure, outcome, Outcome, beta, se, p, anovaP, Effect, lowCI, upCI)
 
 ## Save as .csv
-lme_metab_ssmt_timeonly %>% fwrite("../output/tab_res_ssmt_metab_timeonly_bymeal.csv")
+#lme_metab_ssmt_timeonly %>% fwrite("../output/tab_res_ssmt_metab_timeonly_bymeal.csv")
 lme_metab_ssmt_timeonly <- fread("../output/tab_res_ssmt_metab_timeonly_bymeal.csv")
 
-
+# ==================================================================================================
 ## Calculate Kendall's Tao for agreement between first and second high(ER) carb meals
 # Interpretting: https://blogs.sas.com/content/iml/2023/04/05/interpret-spearman-kendall-corr.html
+# ==================================================================================================
 
+# Tao for time effect in standardized vs HC self-selected MMTT
 tao.dat <- inner_join(
   lme_metab_mmtt_timeonly %>%
     filter(Exposure == "Time_120") %>%
@@ -457,6 +474,7 @@ cor(tao.dat$mmtt, tao.dat$ssmt, method="kendall") # 0.4412352 = *Moderate to str
 cor.test(tao.dat$mmtt, tao.dat$ssmt, method="kendall") # 0.4412352 = *Moderate to strong* correlation !
 res <- cor.test(tao.dat$mmtt, tao.dat$ssmt, method = "kendall")
 res$p.value
+
 
 # ==============================================================================
 ## Time effect, stratified by meal type && genotype ********
@@ -483,6 +501,30 @@ lme_metab_ssmt_bymealxgeno <- lapply(meals, function(meal) {
 lme_metab_ssmt_bymealxgeno <- fread("../output/tab_res_ssmt_metab_time_bymealxgeno.csv")
 
 lme_metab_ssmt_bymealxgeno %>% filter(p<0.05/23)
+
+
+# ======================================================================
+# Genotype effect, for each self-selected meal type
+# ======================================================================
+
+lme_metab_ssmt_bymeal_geno <- lapply(meals, function(meal) {
+  lapply(1:length(metabolites[1:2]), function(m) {
+      metab <- metabolites[m]
+      Metabolite <- met_info$Name[met_info$HMDB == metab][1]
+      run_lme(exposure = "genotype*time", outcome=metab, 
+              covariates = "genotype*time", coefficients_to_print = c(Time="time", Genotype="genotype"), 
+              data=analysis2 %>% filter(time %in% c(235,360) & meal_choice == meal), digits=c(1,3)) %>%
+        mutate(outcome=metab, Outcome=Metabolite) %>%
+        mutate(meal_type = meal, .before=Exposure) 
+    }) %>% do.call(rbind.data.frame, .)
+  }) %>% do.call(rbind.data.frame, .) %>%
+  filter(grepl(" x ", Exposure)) %>%
+  mutate_at("Exposure", ~gsub(".* x", "HC Genotype x", .)) %>%
+  select(meal_type, Exposure, outcome, Outcome, beta, se, p, anovaP, Effect, lowCI, upCI)
+
+## Save as .csv
+#lme_metab_ssmt_bymeal_geno %>% fwrite("../output/tab_res_ssmt_metab_bymeal_geno.csv")
+lme_metab_ssmt_bymeal_geno <- fread("../output/tab_res_ssmt_metab_bymeal_geno.csv")
 
 # ========================================================
 ## Pathway Enrichment Analysis for self-selected meals

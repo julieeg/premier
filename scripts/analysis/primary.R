@@ -15,7 +15,8 @@ Unit<-Units[1]
 lapply(list.files("../../pantry/functions/", recursive = T, full.names = T), source)
 
 # Analysis dataset
-analysis <- readRDS("../data/processed/premier_analysis.rda")
+analysis <- readRDS("../data/processed/premier_analysis.rda") %>%
+  mutate(gene_x_meal = genetic_cat_x_meal_choice)
 
 
 ################################################################################
@@ -57,9 +58,9 @@ names(postprandial_mmtt_vars) <- c(paste0(
 
 # iAUC glycemic traits
 iAUC_vars <- c(paste0(
-  rep(c("Glucose ", "Insulin "), each=7), rep(c("30", "60", "120", "180", "235", "270", "300", "360"), 2), rep("min iAUC (pos)",14), rep(paste0(" ", Unit), 10)))
+  rep(c("Glucose ", "Insulin "), each=8), rep(c("30", "60", "120", "180", "235", "270", "300", "360"), 2), rep("min iAUC (pos)",14), rep(paste0(" ", Unit), 10)))
 names(iAUC_vars) <- c(paste0(
-  rep(c("glucose_", "insulin_"), each=7), rep(c("30", "60", "120", "180", "235", "270", "300", "360"), 2),  rep("iAUC.pos",14)))
+  rep(c("glucose_", "insulin_"), each=8), rep(c("30", "60", "120", "180", "235", "270", "300", "360"), 2),  rep("iAUC.pos",14)))
 
 
 
@@ -88,8 +89,8 @@ lapply(summary_table_strata.l, function(strata){
     print_summary_table(
       analysis, vars_to_summarize = vars$vars, p_adjust = "none", digits = c(1,1,3),
       var_strata = strata$var, var_strata_order = strata$order,
-      p_types = "descriptive", p_smalln=T) #%>%
-      #fwrite(paste0("../output/tab_descr_", vars$label, "_", strata$label, ".csv"), row.names = T)
+      p_types = "descriptive", p_smalln=T) %>%
+      fwrite(paste0("../output/tab_descr_", vars$label, "_", strata$label, ".csv"), row.names = T)
   })
 })
 
@@ -105,12 +106,18 @@ summary(lm(insulin_235~meal_choice+genotype, data=analysis))
 summary(glm(hc_meal~insulin_235+genotype, family=binomial("logit"), 
             data=analysis %>% mutate(hc_meal = ifelse(meal_choice=="HC meal",1,0))))
 
-
 ## Mean differences in iAUC by genotype
 summary(lm(glucose_120iAUC.net~genotype,data=analysis))
 t.test(glucose_120iAUC.net~genotype,data=analysis)
 
+## Additional comparisons across genotype x meal type 
+print_summary_table(analysis, vars_to_summarize = summary_table_vars.l[[5]]$vars,
+                    p_adjust = "none", digits = c(1,1,3), var_strata = "gene_x_meal", 
+                    var_strata_order = c(unique(analysis$gene_x_meal)), p_print = F) %>%
+  fwrite("../output/tab_descr_iAUC_genexmeal.csv", row.names = T)
 
+anova(lm(glucose_30iAUC.pos~genotype, data=analysis))
+t.test(glucose_60iAUC.pos~genotype,data=analysis)
 
 ################################################################################
 ##  ------------------ Postprandial glycemic responses  --------------------- ##
@@ -240,6 +247,7 @@ models_selected.l <- list(
  
 
 ## Overall meal effect on postprandial responses (all participants) ----------------------------
+table(postprandial$meal_choice)
 
 # meal choice x time
 do.call(rbind, lapply(c("glucose", "insulin"), function(m) {
@@ -249,18 +257,18 @@ do.call(rbind, lapply(c("glucose", "insulin"), function(m) {
   data_long <- postprandial %>% filter(time %in% c(235,270,300,360)) 
   # run lme models
   rbind(run_lme(exposure="meal_choice", outcome=m, outcome_label = str_to_sentence(m),
-                covariates=models$main, coefficients_to_print = c(coefs_to_print, "Time"="time"), 
+                covariates=paste0(models$main,"+age+sex"), coefficients_to_print = c(coefs_to_print, "Time"="time"), 
                 data_long = data_long, digits = 1),
         run_lme(exposure="meal_choice", outcome=m, outcome_label = str_to_sentence(m),
-                covariates=models$int, coefficients_to_print = c(coefs_to_print, "Time"="time"), 
+                covariates=paste0(models$int,"+age+sex"), coefficients_to_print = c(coefs_to_print, "Time"="time"), 
                 data_long = data_long,  digits = c(1,3)) %>%
           filter(grepl(" x ", Exposure))) 
-  })) %>% mutate(Model="empty", .before="Exposure") %>% 
+  })) %>% mutate(Model="primary", .before="Exposure") %>% 
   mutate_all(., ~ifelse(is.na(.)==T, "-", .))  %>% 
   mutate(Meal.Type="Self-Selected", .before="Model") %>%
   select(Meal.Type, Model, Effect, Outcome, Exposure, beta, se, p, anovaF, anovaP, Beta.SE, P, P_signif, anovaP_signif) %>%
   mutate_all(., ~ifelse(is.na(.)==T, "-", .)) %>%
-  fwrite(paste0("../output/tab_res_ssmt_postprandial_mealEffect_mgdL.csv"))
+  fwrite(paste0("../output/tab_res_ssmt_postprandial_mealEffect_main_mgdL.csv"))
 
 
 ## Stratified analyses: effect of genotype on postprandial responses by meal ----------------------------
@@ -297,10 +305,10 @@ do.call(rbind, lapply(1:length(models_selected.l$strat_geno), function(m) {
   do.call(rbind, lapply(metabolites, function(metab) {
     data_long <- postprandial %>% filter(time %in% c(235,270,300,360)) 
     do.call(rbind, lapply(c("HC genotype", "HF genotype"), function(geno) {
-      rbind(run_lme(exposure="meal_choice", outcome=metab, outcome_label = str_to_sentence(metab),
+      rbind(run_lme(exposure="meal_choice", outcome=metab, outcome_label = str_to_sentence(metab), digits=c(1,3),
                     covariates=models_selected.l$strat_geno[[m]]$main, coefficients_to_print = coefs_to_print, 
                     data_long = data_long %>% filter(genotype == geno)),
-            run_lme(exposure="meal_choice", outcome=metab, outcome_label = str_to_sentence(metab),
+            run_lme(exposure="meal_choice", outcome=metab, outcome_label = str_to_sentence(metab), digits=c(1,3),
                     covariates=models_selected.l$strat_geno[[m]]$int, coefficients_to_print = coefs_to_print, 
                     data_long = data_long %>% filter(genotype == geno)) %>% 
               filter(grepl(" x ", Exposure))) %>%
@@ -321,23 +329,44 @@ do.call(rbind, lapply(1:length(models_selected.l$strat_geno), function(m) {
 print_summary_table(data=analysis, vars_to_summarize = c(
   glucose_270iAUC.pos="Glucose, 270 iAUC", glucose_300iAUC.pos="Glucose, 300 iAUC", glucose_360iAUC.pos="Glucose, 360 iAUC",
   insulin_270iAUC.pos="Insulin, 270 iAUC", insulin_300iAUC.pos="Insulin, 300 iAUC", insulin_360iAUC.pos="Insulin, 360 iAUC"), 
-  var_strata="genetic_cat_x_meal_choice")
+  var_strata="genetic_cat_x_meal_choice") %>%
+  fwrite("../output/tab_descr_iAUC_genecat.csv")
 
 # Glucose differences for SSMT
-t.test(glucose_270iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HC meal")) #P=0.947
-t.test(glucose_270iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HF meal")) #P=0.0421
-t.test(glucose_300iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HC meal")) #P=0.721
-t.test(glucose_300iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HF meal")) #P=0.014
-t.test(glucose_360iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HC meal")) #P=0.537
-t.test(glucose_360iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HF meal")) #P=0.03596
+t.test(glucose_270iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HC meal"))$p.value #P=0.947
+t.test(glucose_270iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HF meal"))$p.value #P=0.0421*
+t.test(glucose_300iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HC meal"))$p.value #P=0.721
+t.test(glucose_300iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HF meal"))$p.value #P=0.014*
+t.test(glucose_360iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HC meal"))$p.value #P=0.537 !
+t.test(glucose_360iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HF meal"))$p.value #P=0.03596* !
+
+t.test(glucose_270iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HC genotype")) #P=0.04385
+t.test(glucose_270iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HF genotype")) #P=0.1855
+t.test(glucose_300iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HC genotype")) #P=0.0154
+t.test(glucose_300iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HF genotype")) #P=0.1018
 
 # Insulin differences for SSMT
 t.test(insulin_270iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HC meal")) #P=0.1791
 t.test(insulin_270iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HF meal")) #P=0.3778
 t.test(insulin_300iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HC meal")) #P=0.1445
 t.test(insulin_300iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HF meal")) #P=0.3387
-t.test(insulin_360iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HC meal")) #P=0.08116
-t.test(insulin_360iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HF meal")) #P=0.455
+t.test(insulin_360iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HC meal")) #P=0.08116 !
+t.test(insulin_360iAUC.pos~genotype, data=analysis %>% filter(meal_choice=="HF meal")) #P=0.455 ! 
+
+t.test(insulin_270iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HC genotype")) #P=0.3577
+t.test(insulin_270iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HF genotype")) #P=0.1914
+t.test(insulin_300iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HC genotype")) #P=0.2764
+t.test(insulin_300iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HF genotype")) #P=0.1254
+
+# 120-min Glucose & Insulin for SSMT stratified by Meal 
+t.test(glucose_360iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HC genotype")) #P=0.003868**
+t.test(glucose_360iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HF genotype")) #P=0.1224
+t.test(insulin_360iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HC genotype")) #P=0.2653
+t.test(insulin_360iAUC.pos~meal_choice, data=analysis %>% filter(genotype=="HF genotype")) #P=0.04498*
+
+# Global interactions
+anova(lm(glucose_360iAUC.pos~meal_choice*genotype, data=analysis)) 
+anova(lm(insulin_360iAUC.pos~meal_choice*genotype, data=analysis)) 
 
 
 ## Stratified analyses: effect of genotype on iAUC by meal type ==========
@@ -366,12 +395,45 @@ do.call(rbind, lapply(metabolites, function(m) {
   mutate(Meal.Type="Self-Selected", Effect="Main") %>%
   mutate(across(c(n, beta, se, p, f, f_p), ~as.numeric(.))) %>%
   mutate(lowCI=beta-1.96*se, upCI=beta+1.96*se) %>%
-  mutate(Beta.SE=ifelse(is.na(beta)==T, "-", sprintf("%s (%s, %s)", round(beta,2), round(lowCI,2), round(upCI,2))), P=format_p(p)) %>%
+  mutate(Beta.SE=ifelse(is.na(beta)==T, "-", sprintf("%s (%s, %s)", round(beta,1), round(lowCI,1), round(upCI,1))), P=format_p(p)) %>%
   mutate(P_signif=format_p_star(p), anovaP_signif=format_p_star(f_p)) %>%
   select(Strata=strata, Level=strata_level, Meal.Type, Model=model, Effect, Outcome=outcome, Exposure=exposure, N=n, beta, se, p, anovaF=f, anovaP=f_p, Beta.SE, P, P_signif, anovaP_signif) %>%
   mutate_all(., ~ifelse(is.na(.)==T, "-", .)) %>%
   arrange(desc(Model), Level) %>% 
   fwrite(paste0("../output/tab_res_ssmt_iAUC_genoEffect_byMeal_mgdL.csv"))
+
+## Stratified analyses: effect of meal type on iAUC by genotype ==========
+
+do.call(rbind, lapply(metabolites, function(m) {
+  do.call(rbind, lapply(c("HC genotype", "HF genotype"), function(geno) {
+    do.call(rbind, lapply(c(270,300,360), function(t) {
+      y <- paste0(m,"_",t,"iAUC.pos") ; 
+      rbind.data.frame(
+        # primary model
+        print_lm(exposure = "meal_choice", outcome=y, lm_trend = F, digits=c(1,3),
+                 covariates = "age+sex+PC1z+PC2z+PC3z", label="Primary",
+                 data = analysis %>% filter(genotype==geno)),
+        # adjusting for metabolite at time0
+        print_lm(exposure = "meal_choice", outcome=y, lm_trend = F, digits=c(1,3),
+                 covariates = paste0("age+sex+PC1z+PC2z+PC3z+",m,"_235"), label="AdjTime0",
+                 data = analysis %>% filter(genotype==geno)),
+        # adjusting bmi
+        print_lm(exposure = "meal_choice", outcome=y, lm_trend = F, digits=c(1,3),
+                 covariates = paste0("age+sex+PC1z+PC2z+PC3z+bmi"), label="BMI",
+                 data = analysis %>% filter(genotype==geno))
+      ) }))  %>% 
+      mutate(strata="Genotype", strata_level=geno, .before=outcome) 
+  }))
+})) %>%
+  mutate(Meal.Type="Self-Selected", Effect="Main") %>%
+  mutate(across(c(n, beta, se, p, f, f_p), ~as.numeric(.))) %>%
+  mutate(lowCI=beta-1.96*se, upCI=beta+1.96*se) %>%
+  mutate(Beta.SE=ifelse(is.na(beta)==T, "-", sprintf("%s (%s, %s)", round(beta,1), round(lowCI,1), round(upCI,1))), P=format_p(p)) %>%
+  mutate(P_signif=format_p_star(p), anovaP_signif=format_p_star(f_p)) %>%
+  select(Strata=strata, Level=strata_level, Meal.Type, Model=model, Effect, Outcome=outcome, Exposure=exposure, N=n, beta, se, p, anovaF=f, anovaP=f_p, Beta.SE, P, P_signif, anovaP_signif) %>%
+  mutate_all(., ~ifelse(is.na(.)==T, "-", .)) %>%
+  arrange(desc(Model), Level) %>% 
+  fwrite(paste0("../output/tab_res_ssmt_iAUC_mealEffect_byGeno_mgdL.csv"))
 
 
 ##################################################################

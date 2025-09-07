@@ -58,16 +58,22 @@ parameters <- list(
 genotypes <- c("HC genotype", "HF genotype")
 meals <- c("HC meal", "HF meal")
 
-ggplot_ms <- theme(
-  panel.grid = element_line(linewidth=0.25),
-  panel.grid.minor.x = element_blank(),
-  panel.grid.minor.y = element_blank(),
-  legend.background = element_rect(linewidth = 0.35, color="black"),
+ggplot_ms <- theme_classic() + theme(
+  #panel.grid = element_line(linewidth=0.25),
+  panel.grid.major = element_line(linewidth=0.25),
+  panel.grid.minor = element_blank(),
+  axis.line = element_line(linewidth=0.25),
+  legend.background = element_rect(linewidth = 0.15, color="white", fill="white"),
   #legend.margin = margin(0.25,0.25,0.25,0.25,unit="pt"),
-  legend.margin = margin(rep(0.15,4), unit="cm"),
-  legend.title = element_text(face="bold"),
-  legend.text = element_text(size=10)
-)
+  #legend.margin = margin(rep(0.15,4), unit="cm"),
+  legend.margin = margin(0.25,0.75,0.25,0.75,unit="mm"),
+  legend.direction = "horizontal", 
+  legend.position = c(0.5,-0.5), 
+  legend.title = element_blank(), #element_text(face="bold"),
+  legend.text = element_text(size=11),
+  legend.key = element_rect(fill=NA, color=NA),
+  axis.text = element_text(color="black")
+) 
 
 unit="mgdL" ; Unit="mg/dL"
 
@@ -115,17 +121,10 @@ plot_ppXtime_stratified <- function(metabolite, times = c(0,30,60,120,180,235),
     scale_color_manual(values=parameters[[strata]]$palette, name=parameters[[strata]]$label) + 
     scale_y_continuous(expand=c(0.1,0.05)) +
     xlab("Time (minutes)") + ylab(y_label) + 
-    #ggtitle(str_to_sentence(metabolite)) +
-    theme_bw() + 
-    theme(panel.grid = element_line(linewidth=0.25),
-          panel.grid.minor.x = element_blank(),
-          panel.grid.minor.y = element_blank(),
-          legend.background = element_rect(linewidth = 0.35, color="black"),
-          legend.margin = margin(0.1,0.1,0.1,0.1,unit="cm"),
-          legend.title = element_text(face="bold"),
-          legend.text = element_text(size=10))
+    #theme_classic() + 
+    #theme(panel.grid.major = element_line(linewidth=0.2))
+    ggplot_ms 
 }
-
 
 # ==================================================
 ## Plot mean iAUC - stratified 
@@ -134,19 +133,26 @@ plot_ppXtime_stratified <- function(metabolite, times = c(0,30,60,120,180,235),
 plot_iAUC_strat <- function(metabolite, y_extend=c(0.15,0), iAUC=120, strata, fancy_x=T, data=analysis) {
   strata_var=parameters[[strata]]$strata 
   y_label = paste("120 min iAUC", metabolite, "\n(mg·min/dL)")
+  
   p <- data %>% select(id, starts_with(metabolite) & ends_with(paste0(iAUC,"iAUC.pos")), strata=all_of(strata_var)) %>%
     rename_at(paste0(metabolite, "_", iAUC, "iAUC", ".pos"), ~gsub(paste0("[_]", iAUC,"iAUC.*"), "", gsub(metabolite, "value", .))) %>%
     group_by(strata) %>% filter(complete.cases(strata)) %>%
     reframe(n=n(), mean=mean(value), sd=sd(value)) %>% mutate(se=sd/sqrt(n)) %>%
+    
     ggplot(aes(x=strata, y=mean, ymin=mean-se, ymax=mean+se, fill=strata)) + 
     geom_bar(stat="identity", alpha=0.99) + geom_errorbar(width=0.075) +
     xlab(parameters[[strata]]$label) + ylab(y_label) + 
     scale_fill_manual(values=parameters[[strata]]$palette, name=parameters[[strata]]$label) + 
-    theme_bw() + theme(axis.text.x = element_blank()) 
+    #theme_bw() + 
+    #theme(axis.text.x = element_blank()) 
+    ggplot_ms
+  
     p <- ggplot_extend_ylim(p, y_max_extend=y_extend[1], y_extend[2])
+    
     if(fancy_x == T) {
-      p <- p + xlab("") + theme(axis.text.x = element_text(vjust=-0.5, color="black", size=11)) + 
-        scale_x_discrete(labels = parameters[[strata]]$levels_fancy)
+      p <- p + #xlab("") + #theme(axis.text.x = element_text(vjust=-0.5, color="black", size=11)) + 
+        scale_x_discrete(labels = gsub("\ngenotype", "", parameters[[strata]]$levels_fancy)) +
+        theme(axis.title.x = element_text(color="black", size=11))
       } ; p
 }
 
@@ -167,7 +173,7 @@ plot_iAUC_strat_panel <- function(metabolite, iAUC=360, y_extend=c(0.15,0),
     geom_bar(stat="identity", alpha=0.99) + geom_errorbar(width=0.075) +
     xlab(parameters$gene_x_meal$label) + ylab(y_label) + 
     scale_fill_manual(values=parameters$gene_x_meal$palette, name=parameters$gene_x_meal$label) + 
-    theme_bw() + theme(axis.text.x = element_blank()) + 
+    #theme_bw() + theme(axis.text.x = element_blank()) + 
     ggplot_ms + 
     theme(strip.background = element_blank(), strip.text=element_text(face="bold", size=14))
     
@@ -178,25 +184,47 @@ plot_iAUC_strat_panel <- function(metabolite, iAUC=360, y_extend=c(0.15,0),
       } ; p
 }
 
+plot_iAUC_strat2 <- function(metabolite, y_extend=c(0.15,0), iAUC=360, data=analysis) {
+  y_label = paste("120 min iAUC", metabolite, "\n(mg·min/dL)")
+  p <- data %>% select(id, starts_with(metabolite) & ends_with(paste0(iAUC,"iAUC.pos")), genotype, meal_choice) %>%
+    rename_at(paste0(metabolite, "_", iAUC, "iAUC", ".pos"), ~gsub(paste0("[_]", iAUC,"iAUC.*"), "", gsub(metabolite, "value", .))) %>%
+    group_by(genotype, meal_choice) %>% filter(complete.cases(genotype) & complete.cases(meal_choice)) %>%
+    reframe(n=n(), mean=mean(value), sd=sd(value)) %>% mutate(se=sd/sqrt(n)) %>%
+    mutate(col = paste(genotype, "x", meal_choice)) %>%
+    ggplot(aes(x=meal_choice, y=mean, ymin=mean-se, ymax=mean+se, fill=col, group=genotype)) + 
+    geom_bar(stat="identity", alpha=0.99, position=position_dodge(0.9), width=0.8) + 
+    geom_errorbar(width=0.075, position=position_dodge(0.9)) +
+    xlab(parameters$gene_x_meal$label) + ylab(y_label) + 
+    scale_fill_manual(values=parameters$gene_x_meal$palette, name=parameters$gene_x_meal$label) + 
+    scale_x_discrete(expand = c(0.5,0)) +
+    #theme_bw() + 
+    ggplot_ms +
+    theme(
+      axis.title.x = element_blank(), axis.text.x = element_text(face="bold", size=12)) 
+    p <- ggplot_extend_ylim(p, y_max_extend=y_extend[1], y_extend[2])
+    p
+}
 ```
 
 
 ## Figure panels
 
 ## *Mixed-Meal Tolerance Tests*
-### Fig 1a+b. Effect of genotype on postprandial resopnses over 4h (a) & 120 min iAUC glucose/insulin
-
+### Fig 2a,b. Effect of genotype on postprandial resopnses over 4h (a) & 120 min iAUC glucose/insulin
 ```{r}
 ## a) postprandial resposnes by genotype (height=3.5,width=8; error_bar width=10 ??)
 p_glu_geno_indiv <- plot_ppXtime_stratified("glucose", times = c(0,30,60,120,180,235)) +
   coord_cartesian(ylim=c(45,165)) + scale_y_continuous(breaks=seq(30,150,30)) + 
-  annotate("text", x = 60.25, y = 133, label = "*", size = 6) 
+  annotate("text", x = 60.25, y = 140, label = "*", size = 6) +
+  geom_segment(aes(x = 53, xend = 67, y = 139, yend = 139), linewidth = 0.2, color="black") +
+  guides(color = guide_legend(override.aes = list(linetype = 1, size = 1.2)))
+
 p_insu_geno_indiv <- plot_ppXtime_stratified("insulin", times = c(0,30,60,120,180,235)) + 
   coord_cartesian(ylim=c(-5,135)) + scale_y_continuous(breaks=seq(0,125,30)) + 
-  annotate("text", x = 60.25, y = 70, label = "*", size = 6) 
+  annotate("text", x = 60.25, y = 78, label = "*", size = 6) +
+  geom_segment(aes(x = 53, xend = 67, y = 77, yend = 77), linewidth = 0.25, color="black") 
 fig2a <- ggarrange("", p_glu_geno_indiv, "", p_insu_geno_indiv, common.legend = T, 
-                   legend = "top", nrow=1, widths=c(0.05,1,0.05,1), #labels=c("", "a", "", ""), 
-                   hjust=0.5, vjust=0.95, font.label = c(size=16), align="hv") ; fig2a 
+                   legend = "top", nrow=1, widths=c(0.05,1,0.05,1), align="hv") ; fig2a 
 
 ## b) iAUC (pos) by genotype
 p_glu_geno_iauc <- plot_iAUC_strat("glucose", strata="genotype", fancy_x = T) +
@@ -204,21 +232,24 @@ p_glu_geno_iauc <- plot_iAUC_strat("glucose", strata="genotype", fancy_x = T) +
   geom_segment(aes(x = 0.9, xend = 2.1, y = 2500, yend = 2500), linewidth = 0.35) + 
   annotate("text", x = 1.5, y = 2550, label = "**", size = 6) 
 p_insu_geno_iauc <- plot_iAUC_strat("insulin", strata="genotype", fancy_x = T) +
-  coord_cartesian(ylim=c(0,3000)) + scale_y_continuous(breaks=seq(0,3000,1000)) +
-  theme(axis.text.x = element_text(size=11))
+  coord_cartesian(ylim=c(0,3000)) + scale_y_continuous(breaks=seq(0,3000,1000)) #+
+  #theme(axis.text.x = element_text(size=11))
 fig2b <- ggarrange("", p_glu_geno_iauc, "", p_insu_geno_iauc, "", common.legend = T, 
-                   legend = "none", nrow=1, widths=c(0.2,1,0.05,1,0.2), align="hv") ; fig2b
+                   legend = "none", nrow=1, widths=c(0.05,1,0.05,1,0), align="hv") ; fig2b
 
 ## P-values added to plot?
 summary(lm(glucose_120iAUC.pos ~ genotype+age+sex+PC1z+PC2z+PC3z, data = analysis)) # Ppair = 0.00666 ; Panova=0.085
 summary(lm(insulin_120iAUC.pos ~ genotype+age+sex+PC1z+PC2z+PC3z, data = analysis)) # Ppair = 0.225 ; Panova=0.335
 
-fig2ab <- ggarrange(fig2a,"", fig2b, ncol=1, align="h", heights=c(1.15, 0.15,1)) 
-fig2ab %>% ggsave(filename="../output/fig2ab_mmtt.pdf", width=6.5, height=6)
+fig2ab <- ggarrange(fig2a,"", fig2b, ncol=1, align="h", heights=c(1.15, 0.15,1)) ; fig2ab
+
+# Save plot as PDF
+fig2ab %>% ggsave(filename="../output/fig2ab_mmtt_v2.pdf", width=6.5, height=6)
 
 ```
 
-##### Meal selection by genotype 
+
+### Fig 2g, Meal selection by genotype 
 ```{r, echo=F, warning=F, fig.width=6, fig.height=2}
 fig2g <- analysis %>% group_by(genotype) %>%
   filter(complete.cases(genotype, meal_choice)) %>%
@@ -231,23 +262,23 @@ fig2g <- analysis %>% group_by(genotype) %>%
   ggplot(aes(x=genotype, y=pct, fill=geneXmeal)) +
   geom_bar(stat="identity", position=position_stack()) +
   scale_fill_manual(values=parameters$gene_x_meal$palette, name="Genotype x Meal choice") + 
-  scale_x_discrete(labels = parameters$genotype$levels_fancy) +
-  theme_bw()+ ggplot_ms + 
+  scale_x_discrete(labels = gsub("\ngenotype", "", parameters$genotype$levels_fancy)) +
+  ggplot_ms + 
   theme(axis.text.x=element_text(color = "black", size=11, vjust=-0.5),
         axis.text.y = element_text(size=12), axis.title.y = element_text(color = "black", size=12),
         legend.key.size = unit(0.45, "cm"),
         legend.title = element_text(size=10),
         legend.text = element_text(size=10),
         legend.direction = "vertical",
-        legend.position = "bottom") +
-  ylab("Percent") + xlab("") + 
-  #coord_flip() + 
-  guides(fill = guide_legend(reverse = F)) ; fig2g
+        legend.position = "bottom",
+        panel.border = element_rect(color="black", fill = "#FFFFFF00")) +
+  ylab("Percent") + xlab("Genotype") + 
+  guides(fill = guide_legend(reverse = F)) + 
+  theme(axis.title.x = element_text(color="black", size=11, vjust=-0.5)); fig2g
 
-fig2g_formatted <- ggarrange("", fig2g, labels = c("", "g"), widths=c(0.05,1),
-          hjust=0.25, vjust=1.05,font.label = c(size=16))
+fig2g_formatted <- ggarrange("", fig2g, widths=c(0.05,1))
 
-fig2g_formatted %>% ggsave(filename="../output/fig2g_mealxgeno.pdf", height=6.5, width=2.5)
+fig2g_formatted %>% ggsave(filename="../output/fig2g_mealxgeno_v2.pdf", height=6.5, width=2.5)
 
 fig2legend <- fig2g + theme(legend.direction = "horizontal",
               legend.text = element_text(size=10),
@@ -257,7 +288,8 @@ fig2legend %>% ggsave(filename="../output/fig2_legend.pdf", height=5.5, width=10
 
 
 #### Self-Selected Meals (High Carb vs. High Fat)
-### Postprandial glucose & insulin, by genetic category & meal selection
+
+### Fig h,i Postprandial glucose & insulin, by genetic category & meal selection
 ```{r, echo=F, fig.height=8, fig.width=12}
 meals <- c("HC meal", "HF meal")
 
@@ -287,9 +319,9 @@ p_ssmt_insu_indiv <- ggarrange(
 fig2h <- ggarrange(p_ssmt_glu_indiv, "", p_ssmt_insu_indiv, legend = "none", 
                    nrow=3, heights=c(1.05,0.025,1.0), align="hv") ; fig2h 
 
-fig2h %>% ggsave(filename="../output/fig2h_ssmt.pdf", width=7, height=5.5)
+fig2h %>% ggsave(filename="../output/fig2h_ssmt_v2.pdf", width=7, height=5)
 
-## Fig 1I
+## Fig 2i - v1
 fig2i <- ggarrange("", plot_iAUC_strat_panel("glucose", fancy_x = F) + 
                      ylab("120 min iAUC glucose\n(mg·min/dL)") +
                      theme(axis.title.x = element_blank(), axis.text.x = element_blank(),
@@ -304,6 +336,30 @@ fig2i <- ggarrange("", plot_iAUC_strat_panel("glucose", fancy_x = F) +
                    common.legend = T, legend = "none", nrow=4, heights=c(0.05,1,0.1,1.1)) ; fig2i 
 
 fig2i %>% ggsave(filename="../output/fig2i_ssmt_iauc.pdf", width=4.5, height=5.5)
+
+# ===============
+## Fig 2i - v2
+# ===============
+
+fig2i <- ggarrange("", plot_iAUC_strat2("glucose") + 
+                     theme(axis.title.x = element_blank(), axis.text.x = element_blank(),
+                           axis.ticks.x = element_blank(), strip.text = element_text(size=12),
+                           axis.text.y = element_text(size=12), axis.title.y = element_text(size=12),
+                           #plot.margin = margin(0,0.1,0,0.1, unit="cm")
+                           ) + 
+                     # P=0.042 for glu ~ genotype for HF diet
+                     geom_segment(aes(x = 1.7, xend = 2.3, y = 2200, yend = 2200), linewidth = 0.25) + 
+                     annotate("text", x = 2, y = 2220, label = "*", size = 6) + 
+                     # P=0.00386 for glu ~ meal for HC geno
+                     geom_segment(aes(x = 0.75, xend = 1.8, y = 2050, yend = 2050), linewidth = 0.25) + 
+                     annotate("text", x = 1.25, y = 2070, label = "**", size = 6),"",
+                   plot_iAUC_strat2("insulin") + 
+                     ylab("120 min iAUC insulin\n(mg·min/dL)") +
+                     theme(strip.text = element_blank(), axis.text.x = element_text(size=12, vjust=-0.35),
+                           axis.text.y = element_text(size=12), axis.title.y = element_text(size=12)),
+                   common.legend = T, legend = "none", nrow=4, heights=c(0.05,1,0.05,1.05)) ; fig2i 
+
+fig2i %>% ggsave(filename="../output/fig2i_ssmt_iauc_v2.pdf", width=3.75, height=5)
 
 ```
 
@@ -335,13 +391,16 @@ plot_volcano.fun <- function(data, p_threshold=0.05/23, beta_threshold=0.5, titl
     theme_bw() + xlab("Beta coefficient for HC vs HF (ref) genotype \n of log2 fold change from 0 min") +
     geom_hline(yintercept = -log10(p_threshold), linetype="dashed") + 
     geom_vline(xintercept = c(-beta_threshold, beta_threshold), linetype="dashed") + 
-    ggtitle(title) + ggplot_ms + 
+    ggtitle(title) + 
+    ggplot_ms + 
     theme(legend.key.size = unit(0.5, "cm")) + 
     theme(strip.background = element_blank(),
           legend.title = element_blank(),
           strip.text = element_text(face="bold"),
-          axis.title.x = element_text(size=8)) +
-    theme(panel.grid.minor.x = element_line(linewidth=0.25))
+          axis.title.x = element_text(size=8),
+          panel.grid.minor.x = element_line(linewidth=0.25),
+          panel.border = element_rect(colour = "black", fill=NA)
+          )
   
   # Add labels
   if(add_labels==T) {
@@ -448,14 +507,15 @@ metabs.hc235[!metabs.hc235 %in% metabs.hf235] %>% length() # 40 unique metabolit
 metabs.hf235[!metabs.hf235 %in% metabs.hc235] %>% length() # 27 unique metabolites for HC/120
 
 ## Listing time-specific metabolites for both genotypes (i.e, intersection at each time point)
-metabs.all120 <- (res_metab_mmtt_timeonly %>% filter(outcome %in% c(intersect(metabs.hc120, metabs.hf120))) %>%
+metabs.all120 <- (res_mmtt_metab_timeonly %>% filter(outcome %in% c(intersect(metabs.hc120, metabs.hf120))) %>%
   arrange(p) %>% pull(outcome))[1:20] 
-metabs.all235 <- (res_metab_mmtt_timeonly %>% filter(outcome %in% c(intersect(metabs.hc235, metabs.hf235))) %>%
+metabs.all235 <- (res_mmtt_metab_timeonly %>% filter(outcome %in% c(intersect(metabs.hc235, metabs.hf235))) %>%
   arrange(p) %>% pull(Outcome))
 
 ## Metabolite Labels - SORT by STRENGTH (top 20 unique metabolits for each genotype/time)
 metabs.hc120.lab <- metabs.hc120[!metabs.hc120 %in% metabs.hf120][1:20] ; metabs.hc235.lab <- metabs.hc235[!metabs.hc235 %in% metabs.hf235][1:20]
 metabs.hf120.lab <- metabs.hf120[!metabs.hf120 %in% metabs.hc120][1:20] ; metabs.hf235.lab <- metabs.hf235[!metabs.hf235 %in% metabs.hc235][1:20]
+
 ```
 
 
@@ -466,14 +526,10 @@ p_v.all <- plot_volcano.fun(
     mutate(Lab = ifelse(Time == "120 min" & outcome %in% metabs.all120, gsub(" &.*", "", Outcome), 
                         ifelse(Time == "235 min" & outcome %in% metabs.all235, gsub(" &.*", "", Outcome), NA))),
   add_labels = T, col1="#00000098", col2="#7F7F7F95", beta_threshold = 0.5) +
-  facet_grid(cols=vars(Time)) + 
-  theme(plot.margin = margin(c(0,0,-0.1,0), unit="mm"),
-        axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
-        strip.text = element_text(face="bold", size=12),
-        axis.title.y = element_text(size=12), axis.text.y = element_text(size=11)) + 
-  #geom_text(data = data.frame(label="All participants (N = 17)", x=-8.35, y=20.65, size=10), 
-   #         aes(x=x, y=y, label=label), inherit.aes = F, hjust=0, vjust=1, size=2, fontface="bold") + 
+  facet_grid(cols=vars(Time)) +
   coord_cartesian(ylim=c(0,20), xlim=c(-8,10)) ; p_v.all
+
+p_v.all %>% ggsave(filename="../output/fig_Sx_mmtt_metab_all.pdf", width=8, height=4)
   
 # HC genotype
 p_v.hc <- plot_volcano.fun(
@@ -495,11 +551,10 @@ p_v.hc <- plot_volcano.fun(
   col1=parameters$genotype$palette[[2]], col2="#D39373", 
   beta_threshold = 0.5) +
   facet_grid(cols=vars(Time)) + 
-  theme(plot.margin = margin(c(-1,0,0,0), unit="line"),
+  theme(plot.margin = margin(c(0,0,-0.1,0), unit="line"),
         axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         axis.title.y = element_text(size=12), axis.text.y = element_text(size=11),
-        #strip.text = element_blank()
-        ) + 
+        strip.text = element_text(face="bold", size=12)) + 
   #geom_text(data = data.frame(label="HC genotype (N = 12)", x=-8.35, y=12.35), 
    #         aes(x=x, y=y, label=label), inherit.aes = F, hjust=0, vjust=1, size=2, fontface="bold") + 
   coord_cartesian(ylim=c(0,12), xlim=c(-8,8)) + 
@@ -526,11 +581,16 @@ p_v.hf <- plot_volcano.fun(
   scale_y_continuous(breaks=seq(0,12,4)) + 
   scale_x_continuous(breaks=seq(-8,10,4)); p_v.hf
 
-## Vertical
+## Vertical-v1
 fig2c <- ggarrange("", ggarrange(p_v.all, p_v.hc, p_v.hf, ncol=1, 
                                  common.legend = F, legend = "none", heights=c(1.1,0.9,1.1)), 
                    labels=c("", "c"), widths=c(0.05,1), hjust=0.25, vjust=2, font.label = c(size=16)) 
-fig2c #%>% ggsave(filename="../output/fig2c_mmtt_metab.pdf", width=6, height=7)
+#fig2c %>% ggsave(filename="../output/fig2c_mmtt_metab.pdf", width=6, height=7)
+
+
+## Vertical-v2, excluding total plot
+fig2c <- ggarrange(ggarrange(p_v.hc, p_v.hf, ncol=1, common.legend = F, legend = "none"))
+fig2c %>% ggsave(filename="../output/fig2c_mmtt_metab_v2.pdf", width=6, height=5.5)
 
 ```
 
@@ -640,7 +700,7 @@ fig2e <- bileacids_fc.df %>%
         legend.text = element_text(size=10),
         legend.margin = margin(0.01,1.5,0.5,0.5,"mm")) ; fig2e
 
-fig2e %>% ggsave(filename="../output/fig2e_bafoldchange.pdf", height=3, width=4.95)
+fig2e %>% ggsave(filename="../output/fig2e_bafoldchange_v2.pdf", height=3, width=4.95)
 ```
 
 ```{r}
@@ -880,7 +940,7 @@ intersect(hchf, hfhf)
 fig2ab <- ggarrange(fig2a,"", fig2b, ncol=1, align="h", heights=c(1.15, 0.15,1)) 
 fig2ab %>% ggsave(filename="../output/fig2ab_mmtt.pdf", width=6.5, height=6)
 
-#2c
+#2c-v1
 fig2c <- ggarrange("", ggarrange(p_v.hc, p_v.hf, ncol=1, common.legend = F, 
                                  legend = "none", heights=c(1.15,1.05)), widths=c(0.05,1)) 
 fig2c %>% ggsave(filename="../output/fig2c_mmtt_metab_4.pdf", width=6, height=5.25)
@@ -903,6 +963,12 @@ fig2legend <- fig2g + theme(legend.direction = "horizontal",
               legend.text = element_text(size=9),
               legend.title = element_text(size=10)) 
 fig2legend %>% ggsave(filename="../output/fig2_legend.pdf", height=6.5, width=6.5)
+
+#=======REVISED========#
+#2c-v2
+fig2c <- ggarrange("", ggarrange(p_v.hc, p_v.hf, ncol=1, common.legend = F, 
+                                 legend = "none", heights=c(1.15,1.05)), widths=c(0.05,1)) 
+fig2c %>% ggsave(filename="../output/fig2c_mmtt_metab_v2.pdf", width=6, height=5.25)
 
 ```
 
@@ -1030,6 +1096,31 @@ fread(paste0("../output/tab_result_lm_glycemic_selected_iAUC_allModels_v3.csv"))
   select(Model, Level, N, Metabolite, Outcome, Exposure, Beta.SE, P=P_signif, AnovaP=anovaP_signif) %>%
   #fwrite("../output/tab_result_120iauc_selected_bygeno_print.csv")
   kable()
+
+
+## Metabolomics table for SSMT
+tab_metab_ssmt_bymealxgeno <- fread("../output/tab_res_ssmt_metab_time_bymealxgeno.csv")
+tab_metab_ssmt_bymealxgeno %>%
+  filter(Exposure != "Time_(joint)") %>%
+  filter(p<0.05) %>%
+  mutate(Beta.CI=sprintf("%s (%s, %s)", round(beta,2), round(lowCI,2), round(upCI,2)), P=format_p(p)) %>%
+  mutate(gxm=paste(genotype, meal, sep="/")) %>%
+  select(genotype, meal=meal_type, outcome, Outcome, Beta.CI, P) %>%
+  pivot_wider(names_from=c(genotype), values_from=c(Beta.CI, P)) %>%
+  pivot_wider(names_from=c(meal), values_from=starts_with(c("Beta.CI", "P"))) %>%
+  fwrite("../output/tab_res_ssmt_metab_time_bymealxgeno_p05_print.csv", row.names = T)
+
+a <- tab_metab_ssmt_bymealxgeno %>%
+  filter(Exposure != "Time_(joint)") %>%
+  filter(p<0.05) %>%
+  mutate(Beta.CI=sprintf("%s (%s, %s)", round(beta,2), round(lowCI,2), round(upCI,2)), P=format_p(p)) %>%
+  mutate(gxm=paste(genotype, meal, sep="/")) %>%
+  select(genotype, meal=meal_type, outcome, Outcome, Beta.CI, P) %>%
+  pivot_wider(names_from=c(genotype), values_from=c(Beta.CI, P)) %>%
+  pivot_wider(names_from=c(meal), values_from=starts_with(c("Beta.CI", "P"))) 
+dim(a)
+length(unique(a$outcome))
+
 ```
 
 
