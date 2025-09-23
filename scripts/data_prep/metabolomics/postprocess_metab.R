@@ -1,7 +1,8 @@
 ## Postprocess Metabolomics Data: Building Analytical Dataset
 
-
 library(tidyverse) ; library(data.table)
+detach("package:swamp", unload = TRUE)
+detach("package:MASS", unload = TRUE)
 lapply(list.files("../../pantry/functions/", recursive = T, full.names = T), source)
 
 
@@ -9,9 +10,13 @@ lapply(list.files("../../pantry/functions/", recursive = T, full.names = T), sou
 ## Load & build metabolomics dataset
 ######################################################### 
 
-metabs <- fread("../data/processed/no_batch_adj/plasma/merged_data/ln_merged_QCd_plasma_knowns.csv") %>%
+#metabs <- fread("../data/processed/no_batch_adj/plasma/merged_data/ln_merged_QCd_plasma_knowns_R1.csv") %>%
+  #separate(sample_id, sep="_", into=c("id", "time")) %>%
+  #filter(!startsWith(id, "PREF")) ; dim(metabs_R1) # 740 metabolites
+
+metabs <- fread("../data/processed/QCd_data/ln/ln_merged_QCd_plasma_knowns.csv") %>%
   separate(sample_id, sep="_", into=c("id", "time")) %>%
-  filter(!startsWith(id, "PREF"))  # 740 metabolites
+  filter(!startsWith(id, "PREF")) ; dim(metabs) # 740 metabolites --> 956 metabolites
 
 analysis <- readRDS("../data/processed/premier_analysis.rda") %>%
   filter(!is.na(genotype))
@@ -43,7 +48,7 @@ metab_dict <- refmet_map_df(gsub("_.*", "", metabolites))
 ## Run LME for all metabolites on glucose 
 lme_metab_mmtt_timeonly <- lapply(1:length(metabolites), function(m) {
   metab <- metabolites[m]
-  Metabolite <- met_info$Name[met_info$HMDB_Id == metab]
+  Metabolite <- met_info$Name[met_info$HMDB_Id == metab][1]
   run_lme(exposure = "time", outcome=metab, outcome_label=Metabolite,
           covariates = "time", #coefficients_to_print = coefs_to_print, 
           data=analysis2 %>% filter(time %in% c(0,120,235)), digits=c(1,3)) %>%
@@ -56,10 +61,10 @@ lme_metab_mmtt_timeonly <- lapply(1:length(metabolites), function(m) {
 # ================================================================
 
 # Count number of total metabolites 
-length(gsub("_.*", "", metabolites)) # 740 metabolites
+length(gsub("_.*", "", metabolites)) # 954 metabolites
 
 # Count number of duplicated metabolites (across methods: cn/cp/hn/hp)
-metabolites_dup <- unique(gsub("_.*", "", metabolites[which(duplicated(gsub("_.*", "", metabolites)))])) ; length(metabolites_dup) # 62
+metabolites_dup <- unique(gsub("_.*", "", metabolites[which(duplicated(gsub("_.*", "", metabolites)))])) ; length(metabolites_dup) # 133
 
 # Among duplicates, which metabolite_method to keep (based on stronger postprandial changes/time)
 metabolites_dup.keep <- lapply(metabolites_dup, function(metab) {
@@ -82,17 +87,19 @@ met_info <- met_info %>% filter(HMDB_Id %in% metabolites_unq) %>%
   mutate(HMDB = gsub("_.*", "", HMDB_Id)) %>%
   mutate_at("Name", ~gsub(" or .*", "", .))
 
-metabolites <- analysis2 %>% select(starts_with("HMDB")) %>% names() ; length(metabolites) # 677
+metabolites <- analysis2 %>% select(starts_with("HMDB")) %>% names() ; length(metabolites) # 677 --> 815
 
 ## Filter metabolite x time data to "kept" duplicates
 lme_metab_mmtt_timeonly <- lme_metab_mmtt_timeonly %>% 
   filter(outcome %in% metabolites_unq) %>%
-  mutate_at("outcome", ~gsub("_.*", "", .)) ; dim(lme_metab_mmtt_timeonly) #2031 15
+  mutate_at("outcome", ~gsub("_.*", "", .)) ; dim(lme_metab_mmtt_timeonly) #2445 15
 
-# Select metabolites changing postprandially
+# Select metabolites changing postprandially (p<0.05)
 #metabolites_pp <- lme_metab_mmtt_timeonly %>% filter(anovaP<0.05) %>% pull(outcome)
 metabolites_pp <- lme_metab_mmtt_timeonly %>% filter(p<0.05) %>% pull(outcome) %>% unique() #396
-length(metabolites_pp) #N=401
+length(metabolites_pp) #N=401 --> 547 (p<0.05)
+
+length(lme_metab_mmtt_timeonly %>% filter(p<0.05/30) %>% pull(outcome) %>% unique()) #429
 
 # Write .csv 
 lme_metab_mmtt_timeonly %>% fwrite("../data/processed/tab_prelim_lme_metab_mmtt_timeonly.csv")
@@ -100,6 +107,8 @@ lme_metab_mmtt_timeonly %>% fwrite("../output/tab_res_mmtt_metab_timeonly.csv")
 
 ## Save list of metabolites -------------
 as.data.frame(metabolites) %>% fwrite("../data/processed/metbolites.txt", row.names = F)
+as.data.frame(metabolites_pp) %>% fwrite("../data/processed/metbolites_pp.txt", row.names = F) 
+
 
 ## Metabolomics IDs
 metabolomics_ids <- analysis2 %>% filter(!is.na(HMDB0034408)) %>% pull(id) %>% unique()
@@ -112,9 +121,18 @@ analysis2 <- analysis2 %>% mutate(has_metabolomics = ifelse(id %in% metabolomics
 saveRDS(analysis2, "../data/processed/premier_analysis2.rda")
 
 ## Save updated met_info as dictionary
-met_info %>% 
+met_info_processed <- met_info %>% 
   rename(method=Method) %>%
-  mutate(Method = case_when(method == "cn" ~ "C18-neg", method == "cp" ~ "C18-pos",
+  mutate(Method = case_when(method == "cn" ~ "C18-neg", method == "cp" ~ "C8-pos",
                             method == "hn" ~ "HILIC-neg", method == "hp" ~ "HILIC-pos")) %>%
+  unique()
+
+# For metabolites with two possible names
+multnames <- names(which(met_info_processed %>% select("HMDB") %>% table() >=2, useNames = T))
+keepnames <- lapply(multnames, function(m) {
+  keep1 <- (met_info_processed %>% filter(HMDB == m))[1,]
+}) %>% do.call(rbind.data.frame, .) %>% unique() 
+met_info_processed %>% filter(!HMDB %in% multnames) %>%
+  bind_rows(keepnames) %>% 
   fwrite("../data/processed/met_info_processed.csv")
 

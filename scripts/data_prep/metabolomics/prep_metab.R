@@ -4,7 +4,8 @@
 ## 00_install_pkgs.R
 # ====================================================
 
-install.packages(c("dplyr","GGally","BiocManager","matrixStats","ggplot2","data.table","tibble","tidyverse","janitor","gridExtra","circlize","magick"), repos="https://cloud.r-project.org")
+install.packages(c("dplyr","GGally","BiocManager","matrixStats","ggplot2","data.table","tibble","tidyverse","janitor","gridExtra","circlize","magick"), 
+                 repos="https://cloud.r-project.org")
 BiocManager::install(c("ComplexHeatmap","limma","swamp"),force=T)
 
 
@@ -96,6 +97,7 @@ mz_cols  <- unlist(lapply(dts, function(x) which(grepl("mz", x, ignore.case = T)
 rt_cols  <- unlist(lapply(dts, function(x) which(grepl("rt", x, ignore.case = T), arr.ind = TRUE)[1]))
 hmdb_id_cols  <- unlist(lapply(dts, function(x) which(grepl("hmdb", x, ignore.case = T), arr.ind = TRUE)[1]))
 met_name_cols <- unlist(lapply(dts, function(x) which(grepl("metabolite", x, ignore.case = T), arr.ind = TRUE)[1]))
+
 
 # Clean up data ------------------------------------------------------------------
 
@@ -207,7 +209,7 @@ print(paste0("Data written to:", res_path, "formatted_data/"))
 invisible(sapply(c("GGally","matrixStats","ggplot2","data.table","tibble","tidyverse","janitor","gridExtra","swamp"), library, character.only=T))
 
 options(stringsAsFactors=FALSE)
-res_path     <- "../data/processed/no_batch_adj/plasma/"
+res_path     <- "../data/processed/" #no_batch_adj/plasma/
 dir.create(file.path(paste0(res_path,"/QCd_data/")), recursive=T)
 
 
@@ -327,7 +329,7 @@ names(batch_list) <- names(dfs)
 
 # QC -----------------------------------------------------------------------
 
-tmp <- mapply(dfs,names(dfs),batch_list, SIMPLIFY=F, FUN=function(df,nm,batch_factor) {
+tmp <- mapply(dfs, names(dfs), batch_list, SIMPLIFY=F, FUN=function(df,nm,batch_factor) {
   print(nm)
   df <- rm0VarRows(df) # 1
   df <- rmHighMissingness(df, 0.25) # 2
@@ -420,12 +422,26 @@ print(paste("QC written to:", paste0(res_path, "/QCd_data/")))
 library(dplyr)
 library(tidyr)
 
-##Read data over
-cn <- read.csv("../data/processed/no_batch_adj/plasma/QCd_data/ln/23_0525_MER_PREMIER_C18-neg_QCd_ln.csv")
-cp <- read.csv("../data/processed/no_batch_adj/plasma/QCd_data/ln/23_0525_MER_PREMIER_C18-pos_QCd_ln.csv")
-hn <- read.csv("../data/processed/no_batch_adj/plasma/QCd_data/ln/23_0525_MER_PREMIER_HILIC-pos_QCd_ln.csv")
-hp <- read.csv("../data/processed/no_batch_adj/plasma/QCd_data/ln/23_0525_MER_PREMIER_C18-neg_QCd_ln.csv")
-output_fnm <-  "../data/processed/no_batch_adj/plasma/merged_data/ln_merged_QCd_plasma_knowns.csv"
+## LOOP over two rounds of data
+#data.l <- list(
+#  R1 = list(
+#    cn.file = "../data/processed/no_batch_adj/plasma/QCd_data/ln/23_0525_MER_PREMIER_C18-neg_QCd_ln.csv",
+#    cp.file = "../data/processed/no_batch_adj/plasma/QCd_data/ln/23_0525_MER_PREMIER_C18-pos_QCd_ln.csv",
+#    hn.file = "../data/processed/no_batch_adj/plasma/QCd_data/ln/23_0525_MER_PREMIER_HILIC-pos_QCd_ln.csv",
+#    hp.file = "../data/processed/no_batch_adj/plasma/QCd_data/ln/23_0525_MER_PREMIER_C18-neg_QCd_ln.csv"),
+#  R2 = list(
+cn.file = "../data/processed/QCd_data/ln/25_0515_MER_PREMIER_1-2_C18-neg_Aligned_Scaled_QCd_ln.csv"
+cp.file = "../data/processed/QCd_data/ln/25_0515_MER_PREMIER_1-2_C8-pos_Aligned_Scaled_QCd_ln.csv"
+hn.file = "../data/processed/QCd_data/ln/25_0515_MER_PREMIER_1-2_HILIC_neg_Aligned_Scaled_QCd_ln.csv"
+hp.file = "../data/processed/QCd_data/ln/25_0515_MER_PREMIER_1-2_HILIC-pos_Aligned_Scaled_QCd_ln.csv"
+merged.file = "ln_merged_QCd_plasma_knowns.csv"
+
+cn <- read.csv(cn.file)
+cp <- read.csv(cp.file)
+hn <- read.csv(hn.file)
+hp <- read.csv(hp.file)
+
+output_fnm <-  paste0("../data/processed/QCd_data/ln_merged_QCd_plasma_knowns.csv")
 met_info <- fread("../data/processed/met_info.csv",na.strings="")
 dir.create(dirname(output_fnm))
 
@@ -467,7 +483,7 @@ info <- met_info[, c("Compound_Id","Name", "HMDB_Id")]
 data <- merge(info, merged_df, by = "Compound_Id" )
 
 #Write the files
-data %>% fwrite("../data/processed/no_batch_adj/plasma/merged_data/inv_norm_merged_QCd_plasma.csv")
+data %>% fwrite(paste0("../data/processed/QCd_data/ln/inv_norm_merged_QCd_plasma.csv"))
 
 ## Selecting only known metabolites
 selected_rows <- data[!is.na(HMDB_Id) & HMDB_Id!="NA",]
@@ -486,6 +502,8 @@ transposed_df <- pivot_longer(df, cols = -HMDB_Id, names_to = "sample_id", value
 transposed_df <- pivot_wider(transposed_df, names_from = HMDB_Id, values_from = Value)
 
 fwrite(transposed_df, output_fnm)
+
+#})
 
 ## END OF PIPELINE
 

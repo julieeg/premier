@@ -1,0 +1,20 @@
+"","total","expected","hits","Raw p","Holm p","FDR"
+"Biosynthesis of unsaturated fatty acids",11,1.63,9,1.06e-06,8.47e-05,8.47e-05
+"Arachidonic acid metabolism",3,0.444,3,0.00317,0.25,0.127
+"Primary bile acid biosynthesis",8,1.19,4,0.0198,1,0.527
+"Taurine and hypotaurine metabolism",1,0.148,1,0.148,1,1
+"Linoleic acid metabolism",1,0.148,1,0.148,1,1
+"alpha-Linolenic acid metabolism",1,0.148,1,0.148,1,1
+"Fatty acid biosynthesis",5,0.741,2,0.161,1,1
+"Arginine and proline metabolism",6,0.889,2,0.219,1,1
+"Fructose and mannose metabolism",2,0.296,1,0.275,1,1
+"Cysteine and methionine metabolism",3,0.444,1,0.382,1,1
+"Tryptophan metabolism",3,0.444,1,0.382,1,1
+"Galactose metabolism",4,0.593,1,0.474,1,1
+"Valine, leucine and isoleucine biosynthesis",4,0.593,1,0.474,1,1
+"Butanoate metabolism",4,0.593,1,0.474,1,1
+"Purine metabolism",5,0.741,1,0.553,1,1
+"Valine, leucine and isoleucine degradation",5,0.741,1,0.553,1,1
+"Glycerophospholipid metabolism",5,0.741,1,0.553,1,1
+"Glycine, serine and threonine metabolism",6,0.889,1,0.619,1,1
+"Alanine, aspartate and glutamate metabolism",8,1.19,1,0.725,1,1

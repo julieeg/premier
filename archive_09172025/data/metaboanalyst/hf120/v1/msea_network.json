@@ -1,0 +1,145 @@
+{
+ "nodes": [
+ {
+ "id": "Biosynthesis of unsaturated fatty acids",
+"label": "Biosynthesis of unsaturated fatty acids",
+"size": 10.57576,
+"color": "#FF0000",
+"x": 2.008307,
+"y": -1.027189 
+},
+{
+ "id": "Arachidonic acid metabolism",
+"label": "Arachidonic acid metabolism",
+"size": 11.33333,
+"color": "#FF1500",
+"x": -1.893663,
+"y": 0.7751295 
+},
+{
+ "id": "Fatty acid biosynthesis",
+"label": "Fatty acid biosynthesis",
+"size":        8,
+"color": "#FF2A00",
+"x": 0.5935164,
+"y": 2.381911 
+},
+{
+ "id": "Fatty acid elongation",
+"label": "Fatty acid elongation",
+"size": 11.33333,
+"color": "#FF4000",
+"x":  1.62306,
+"y": -3.375579 
+},
+{
+ "id": "Fatty acid degradation",
+"label": "Fatty acid degradation",
+"size": 11.33333,
+"color": "#FF5500",
+"x": 0.7987776,
+"y": -3.574591 
+},
+{
+ "id": "Linoleic acid metabolism",
+"label": "Linoleic acid metabolism",
+"size": 11.33333,
+"color": "#FF6A00",
+"x": 3.730003,
+"y": -1.369379 
+},
+{
+ "id": "alpha-Linolenic acid metabolism",
+"label": "alpha-Linolenic acid metabolism",
+"size": 11.33333,
+"color": "#FF8000",
+"x": -2.175176,
+"y": -0.7409858 
+},
+{
+ "id": "Cysteine and methionine metabolism",
+"label": "Cysteine and methionine metabolism",
+"size": 5.777778,
+"color": "#FF9500",
+"x": -1.772537,
+"y": -2.126735 
+},
+{
+ "id": "Valine, leucine and isoleucine biosynthesis",
+"label": "Valine, leucine and isoleucine biosynthesis",
+"size": 5.083333,
+"color": "#FFAA00",
+"x": 0.8944613,
+"y": 0.7019599 
+},
+{
+ "id": "Butanoate metabolism",
+"label": "Butanoate metabolism",
+"size": 5.083333,
+"color": "#FFBF00",
+"x": 2.224718,
+"y": 2.147964 
+},
+{
+ "id": "Porphyrin metabolism",
+"label": "Porphyrin metabolism",
+"size": 5.083333,
+"color": "#FFD500",
+"x": 2.665908,
+"y": 0.8225151 
+},
+{
+ "id": "Purine metabolism",
+"label": "Purine metabolism",
+"size": 4.666667,
+"color": "#FFEA00",
+"x": 0.3328459,
+"y": -1.744409 
+},
+{
+ "id": "Valine, leucine and isoleucine degradation",
+"label": "Valine, leucine and isoleucine degradation",
+"size": 4.666667,
+"color": "#FFFF00",
+"x": -0.8010062,
+"y": -3.213533 
+},
+{
+ "id": "Glycerophospholipid metabolism",
+"label": "Glycerophospholipid metabolism",
+"size": 4.666667,
+"color": "#FFFF20",
+"x": -0.4841038,
+"y": -0.2818966 
+},
+{
+ "id": "Glycine, serine and threonine metabolism",
+"label": "Glycine, serine and threonine metabolism",
+"size": 4.388889,
+"color": "#FFFF60",
+"x":   3.0156,
+"y": -2.68017 
+},
+{
+ "id": "Arginine and proline metabolism",
+"label": "Arginine and proline metabolism",
+"size": 4.388889,
+"color": "#FFFF9F",
+"x": -0.8085927,
+"y": 1.802484 
+},
+{
+ "id": "Alanine, aspartate and glutamate metabolism",
+"label": "Alanine, aspartate and glutamate metabolism",
+"size": 4.041667,
+"color": "#FFFFDF",
+"x": 3.842179,
+"y": 0.1854356 
+} 
+],
+"edges": [ {
+ "id": "1",
+"source": "Fatty acid elongation",
+"target": "Fatty acid degradation" 
+} ] 
+}

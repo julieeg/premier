@@ -1,0 +1,106 @@
+{
+ "nodes": [
+ {
+ "id": "Biosynthesis of unsaturated fatty acids",
+"label": "Biosynthesis of unsaturated fatty acids",
+"size": 7.477612,
+"color": "#FF0000",
+"x": 0.8703715,
+"y": 0.4386203 
+},
+{
+ "id": "Arachidonic acid metabolism",
+"label": "Arachidonic acid metabolism",
+"size": 8.494505,
+"color": "#FF2000",
+"x": 1.272487,
+"y": -1.399598 
+},
+{
+ "id": "Fructose and mannose metabolism",
+"label": "Fructose and mannose metabolism",
+"size": 7.115226,
+"color": "#FF4000",
+"x": 2.651296,
+"y": -1.458716 
+},
+{
+ "id": "Cysteine and methionine metabolism",
+"label": "Cysteine and methionine metabolism",
+"size": 5.747253,
+"color": "#FF6000",
+"x": -1.648263,
+"y": 1.259912 
+},
+{
+ "id": "Galactose metabolism",
+"label": "Galactose metabolism",
+"size": 5.057613,
+"color": "#FF8000",
+"x": -0.3143608,
+"y": -2.043098 
+},
+{
+ "id": "Butanoate metabolism",
+"label": "Butanoate metabolism",
+"size": 5.057613,
+"color": "#FF9F00",
+"x": -0.1567803,
+"y": 2.023467 
+},
+{
+ "id": "Porphyrin metabolism",
+"label": "Porphyrin metabolism",
+"size": 5.057613,
+"color": "#FFBF00",
+"x": 2.617366,
+"y": 0.3041926 
+},
+{
+ "id": "Fatty acid biosynthesis",
+"label": "Fatty acid biosynthesis",
+"size": 4.647446,
+"color": "#FFDF00",
+"x": -1.657977,
+"y": -2.157321 
+},
+{
+ "id": "Purine metabolism",
+"label": "Purine metabolism",
+"size": 4.647446,
+"color": "#FFFF00",
+"x":  1.58966,
+"y": 1.790747 
+},
+{
+ "id": "Glycerophospholipid metabolism",
+"label": "Glycerophospholipid metabolism",
+"size": 4.647446,
+"color": "#FFFF2A",
+"x": -0.7422977,
+"y": -0.1015927 
+},
+{
+ "id": "Arginine and proline metabolism",
+"label": "Arginine and proline metabolism",
+"size": 4.371742,
+"color": "#FFFF80",
+"x": 0.865763,
+"y": -2.973162 
+},
+{
+ "id": "Alanine, aspartate and glutamate metabolism",
+"label": "Alanine, aspartate and glutamate metabolism",
+"size": 4.028807,
+"color": "#FFFFD5",
+"x": -2.261671,
+"y": -0.4999247 
+} 
+],
+"edges": [ {
+ "id": "1" 
+},
+{
+ "id": "0" 
+} ] 
+}

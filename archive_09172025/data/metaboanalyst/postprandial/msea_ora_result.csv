@@ -1,0 +1,41 @@
+"","total","expected","hits","Raw p","Holm p","FDR"
+"Biosynthesis of unsaturated fatty acids",36,1.05,11,1.31e-09,1.05e-07,1.05e-07
+"Primary bile acid biosynthesis",46,1.35,6,0.00173,0.136,0.0691
+"Valine, leucine and isoleucine biosynthesis",8,0.234,2,0.0209,1,0.558
+"Galactose metabolism",27,0.789,3,0.0419,1,0.728
+"Fatty acid biosynthesis",47,1.37,4,0.0455,1,0.728
+"Neomycin, kanamycin and gentamicin biosynthesis",2,0.0585,1,0.0576,1,0.769
+"Starch and sucrose metabolism",18,0.526,2,0.0951,1,1
+"Phenylalanine, tyrosine and tryptophan biosynthesis",4,0.117,1,0.112,1,1
+"Fructose and mannose metabolism",20,0.585,2,0.114,1,1
+"Arachidonic acid metabolism",44,1.29,3,0.135,1,1
+"Linoleic acid metabolism",5,0.146,1,0.138,1,1
+"Phenylalanine metabolism",8,0.234,1,0.212,1,1
+"Taurine and hypotaurine metabolism",8,0.234,1,0.212,1,1
+"Ascorbate and aldarate metabolism",9,0.263,1,0.235,1,1
+"Caffeine metabolism",10,0.292,1,0.257,1,1
+"Arginine and proline metabolism",36,1.05,2,0.284,1,1
+"Glycerophospholipid metabolism",36,1.05,2,0.284,1,1
+"Valine, leucine and isoleucine degradation",39,1.14,2,0.317,1,1
+"alpha-Linolenic acid metabolism",13,0.38,1,0.321,1,1
+"Tryptophan metabolism",41,1.2,2,0.339,1,1
+"Arginine biosynthesis",14,0.409,1,0.341,1,1
+"Butanoate metabolism",15,0.439,1,0.361,1,1
+"Histidine metabolism",16,0.468,1,0.379,1,1
+"Ubiquinone and other terpenoid-quinone biosynthesis",18,0.526,1,0.416,1,1
+"Citrate cycle (TCA cycle)",20,0.585,1,0.45,1,1
+"Ether lipid metabolism",20,0.585,1,0.45,1,1
+"Pentose phosphate pathway",23,0.673,1,0.497,1,1
+"Glycolysis / Gluconeogenesis",26,0.76,1,0.541,1,1
+"Alanine, aspartate and glutamate metabolism",28,0.819,1,0.568,1,1
+"Inositol phosphate metabolism",30,0.877,1,0.593,1,1
+"Glyoxylate and dicarboxylate metabolism",31,0.906,1,0.605,1,1
+"Porphyrin metabolism",31,0.906,1,0.605,1,1
+"Glycine, serine and threonine metabolism",33,0.965,1,0.628,1,1
+"Cysteine and methionine metabolism",33,0.965,1,0.628,1,1
+"Fatty acid elongation",38,1.11,1,0.681,1,1
+"Fatty acid degradation",39,1.14,1,0.69,1,1
+"Steroid biosynthesis",41,1.2,1,0.709,1,1
+"Tyrosine metabolism",42,1.23,1,0.717,1,1
+"Amino sugar and nucleotide sugar metabolism",42,1.23,1,0.717,1,1
+"Purine metabolism",70,2.05,1,0.881,1,1

@@ -1,0 +1,34 @@
+{
+ "nodes": [
+ {
+ "id": "Fructose and mannose metabolism",
+"label": "Fructose and mannose metabolism",
+"size": 41.46154,
+"color": "#FF0000",
+"x": -0.2409404,
+"y": -1.153515 
+},
+{
+ "id": "Galactose metabolism",
+"label": "Galactose metabolism",
+"size": 31.49003,
+"color": "#FF8000",
+"x": 0.8077725,
+"y": 0.2233754 
+},
+{
+ "id": "Fatty acid biosynthesis",
+"label": "Fatty acid biosynthesis",
+"size": 19.36661,
+"color": "#FFFF00",
+"x": -0.909006,
+"y": 0.4431423 
+} 
+],
+"edges": [ {
+ "id": "1" 
+},
+{
+ "id": "0" 
+} ] 
+}

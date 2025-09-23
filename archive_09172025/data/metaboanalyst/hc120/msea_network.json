@@ -1,0 +1,162 @@
+{
+ "nodes": [
+ {
+ "id": "Biosynthesis of unsaturated fatty acids",
+"label": "Biosynthesis of unsaturated fatty acids",
+"size": 17.80263,
+"color": "#FF0000",
+"x": -2.188175,
+"y": -3.333146 
+},
+{
+ "id": "Primary bile acid biosynthesis",
+"label": "Primary bile acid biosynthesis",
+"size": 8.148005,
+"color": "#FF1200",
+"x": -0.07784861,
+"y": 1.350762 
+},
+{
+ "id": "Arachidonic acid metabolism",
+"label": "Arachidonic acid metabolism",
+"size": 7.037685,
+"color": "#FF2400",
+"x":  1.11568,
+"y": -3.328611 
+},
+{
+ "id": "Linoleic acid metabolism",
+"label": "Linoleic acid metabolism",
+"size": 14.83432,
+"color": "#FF3700",
+"x": -3.437978,
+"y":  1.11128 
+},
+{
+ "id": "Arginine and proline metabolism",
+"label": "Arginine and proline metabolism",
+"size": 6.289474,
+"color": "#FF4900",
+"x": -1.887929,
+"y": 0.8383021 
+},
+{
+ "id": "Valine, leucine and isoleucine biosynthesis",
+"label": "Valine, leucine and isoleucine biosynthesis",
+"size": 10.40741,
+"color": "#FF5B00",
+"x": -0.540406,
+"y": -0.4744007 
+},
+{
+ "id": "Taurine and hypotaurine metabolism",
+"label": "Taurine and hypotaurine metabolism",
+"size": 10.40741,
+"color": "#FF6D00",
+"x": 1.103841,
+"y": 2.390711 
+},
+{
+ "id": "Fatty acid biosynthesis",
+"label": "Fatty acid biosynthesis",
+"size": 5.518892,
+"color": "#FF8000",
+"x": -0.4608589,
+"y": -3.773238 
+},
+{
+ "id": "alpha-Linolenic acid metabolism",
+"label": "alpha-Linolenic acid metabolism",
+"size": 7.545455,
+"color": "#FF9200",
+"x": -2.195559,
+"y":  2.38364 
+},
+{
+ "id": "Butanoate metabolism",
+"label": "Butanoate metabolism",
+"size": 6.952569,
+"color": "#FFA400",
+"x": -2.351934,
+"y": -0.9851329 
+},
+{
+ "id": "Fructose and mannose metabolism",
+"label": "Fructose and mannose metabolism",
+"size":  5.95858,
+"color": "#FFB600",
+"x": -3.841745,
+"y": -0.4745013 
+},
+{
+ "id": "Galactose metabolism",
+"label": "Galactose metabolism",
+"size": 5.192982,
+"color": "#FFC800",
+"x": 2.761035,
+"y":   -0.464 
+},
+{
+ "id": "Alanine, aspartate and glutamate metabolism",
+"label": "Alanine, aspartate and glutamate metabolism",
+"size": 5.114165,
+"color": "#FFDB00",
+"x": -1.003254,
+"y": -2.297584 
+},
+{
+ "id": "Glycine, serine and threonine metabolism",
+"label": "Glycine, serine and threonine metabolism",
+"size": 4.792115,
+"color": "#FFED00",
+"x": -3.361364,
+"y": -2.190231 
+},
+{
+ "id": "Cysteine and methionine metabolism",
+"label": "Cysteine and methionine metabolism",
+"size": 4.792115,
+"color": "#FFFF00",
+"x": 0.8082177,
+"y": -1.78621 
+},
+{
+ "id": "Glycerophospholipid metabolism",
+"label": "Glycerophospholipid metabolism",
+"size": 4.644737,
+"color": "#FFFF20",
+"x": 2.276379,
+"y":  1.24893 
+},
+{
+ "id": "Valine, leucine and isoleucine degradation",
+"label": "Valine, leucine and isoleucine degradation",
+"size": 4.517451,
+"color": "#FFFF60",
+"x": 2.358869,
+"y": -2.051238 
+},
+{
+ "id": "Tryptophan metabolism",
+"label": "Tryptophan metabolism",
+"size": 4.443001,
+"color": "#FFFF9F",
+"x": 1.269786,
+"y": 0.03822026 
+},
+{
+ "id": "Purine metabolism",
+"label": "Purine metabolism",
+"size": 3.847458,
+"color": "#FFFFDF",
+"x": -0.6213938,
+"y": 2.828285 
+} 
+],
+"edges": [ {
+ "id": "1" 
+},
+{
+ "id": "0" 
+} ] 
+}

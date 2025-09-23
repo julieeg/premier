@@ -17,6 +17,7 @@ library(ggpubr)
 library(knitr)
 library(ggrepel)
 library(ggtext) # element_markdown (for italics)
+library(table1)
 
 # Load pantry "package"
 lapply(list.files("../../pantry/functions/", recursive = T, full.names = T), source)
@@ -60,7 +61,7 @@ meals <- c("HC meal", "HF meal")
 
 ggplot_ms <- theme_classic() + theme(
   #panel.grid = element_line(linewidth=0.25),
-  panel.grid.major = element_line(linewidth=0.25),
+  panel.grid = element_line(linewidth=0.25, color="#00000020"),
   panel.grid.minor = element_blank(),
   axis.line = element_line(linewidth=0.25),
   legend.background = element_rect(linewidth = 0.15, color="white", fill="white"),
@@ -77,10 +78,9 @@ ggplot_ms <- theme_classic() + theme(
 
 unit="mgdL" ; Unit="mg/dL"
 
-## Load list of bile acids
-ba <- readRDS("../data/processed/bileacids.rda")
-bileacids_all <- ba$all
-bileacids_all_abbrev <- ba$abbrev
+metab_dict <- fread("../data/processed/met_dictionary.csv")
+metabolites_pp <- fread("../data/processed/metbolites_pp.txt")$metabolites_pp # 547 changing postprandially (p<0.05)
+metab_suppl_info <- fread("../output/tab_res_mmtt_metab_ppwithdescr.csv")
 
 ```
 
@@ -207,7 +207,7 @@ plot_iAUC_strat2 <- function(metabolite, y_extend=c(0.15,0), iAUC=360, data=anal
 ```
 
 
-## Figure panels
+
 
 ## *Mixed-Meal Tolerance Tests*
 ### Fig 2a,b. Effect of genotype on postprandial resopnses over 4h (a) & 120 min iAUC glucose/insulin
@@ -249,6 +249,17 @@ fig2ab %>% ggsave(filename="../output/fig2ab_mmtt_v2.pdf", width=6.5, height=6)
 ```
 
 
+
+## Triglyceride
+```{r}
+## a) postprandial TG by genotype (height=3.5,width=8; error_bar width=10 ??)
+analysis$tg_0=analysis$tg
+p_tg_geno_indiv <- plot_ppXtime_stratified("tg", times = c(0,120,235),
+                                           data = analysis %>% select(-starts_with("tg_log")) %>% filter(id != "P28")) +
+  #coord_cartesian(ylim=c(45,165)) + scale_y_continuous(breaks=seq(30,150,30)) + 
+  guides(color = guide_legend(override.aes = list(linetype = 1, size = 1.2)))
+```
+
 ### Fig 2g, Meal selection by genotype 
 ```{r, echo=F, warning=F, fig.width=6, fig.height=2}
 fig2g <- analysis %>% group_by(genotype) %>%
@@ -272,13 +283,13 @@ fig2g <- analysis %>% group_by(genotype) %>%
         legend.direction = "vertical",
         legend.position = "bottom",
         panel.border = element_rect(color="black", fill = "#FFFFFF00")) +
-  ylab("Percent") + xlab("Genotype") + 
+  ylab("Percent, per meal type") + xlab("Genotype") + 
   guides(fill = guide_legend(reverse = F)) + 
   theme(axis.title.x = element_text(color="black", size=11, vjust=-0.5)); fig2g
 
 fig2g_formatted <- ggarrange("", fig2g, widths=c(0.05,1))
 
-fig2g_formatted %>% ggsave(filename="../output/fig2g_mealxgeno_v2.pdf", height=6.5, width=2.5)
+fig2g_formatted %>% ggsave(filename="../output/fig2g_mealxgeno_v3.pdf", height=6.5, width=2.5)
 
 fig2legend <- fig2g + theme(legend.direction = "horizontal",
               legend.text = element_text(size=10),
@@ -287,8 +298,7 @@ fig2legend %>% ggsave(filename="../output/fig2_legend.pdf", height=5.5, width=10
 ```
 
 
-#### Self-Selected Meals (High Carb vs. High Fat)
-
+## *Self-Selected Meal Tolerance Tests*
 ### Fig h,i Postprandial glucose & insulin, by genetic category & meal selection
 ```{r, echo=F, fig.height=8, fig.width=12}
 meals <- c("HC meal", "HF meal")
@@ -298,19 +308,21 @@ p_ssmt.l <- lapply(c("glucose", "insulin"), function(y) {
   lapply(meals, function(m) {
     p <- plot_ppXtime_stratified(y, times = c(235,270,300,360), strata = "gene_x_meal", 
                             data=analysis %>% filter(meal_choice==m)) + 
-      theme(axis.text.y=element_text(size=12))
+      theme(axis.text.y=element_text(size=12)) + coord_cartesian(ylim=y_lim) 
     if(y=="glucose") {
       p <- p + ggtitle(m) + theme(plot.title = element_text(hjust=0.5, face="bold", size=12),
                                   axis.text.x = element_blank(), axis.ticks.x = element_blank(),
-                                  axis.title.x =  element_blank(), axis.title.y = element_text(size=12))
+                                  axis.title.x =  element_blank(), axis.title.y = element_text(size=12)) + 
+        coord_cartesian(ylim=c(50,150)) + scale_y_continuous(limits = c(50,150), breaks = seq(50,150,25))
       } ; if(y == "insulin") {
-        p <- p + theme(axis.title.y = element_text(vjust=2.5, size=12))
+        p <- p + theme(axis.title.y = element_text(vjust=2.5, size=12)) + 
+          coord_cartesian(ylim=c(0,60)) + scale_y_continuous(limits = c(0,60), breaks = seq(0,60,15))
       } ; p })
   })
 
 ## Fig 2h
 p_ssmt_glu_indiv <- ggarrange(
-  plotlist=c("",p_ssmt.l[[1]][1], "", p_ssmt.l[[1]][2]), 
+  plotlist=c("", p_ssmt.l[[1]][1], "", p_ssmt.l[[1]][2]), 
   nrow=1, widths=c(0.05,1,0.05,1), common.legend = T, legend = "none") ; p_ssmt_glu_indiv
 p_ssmt_insu_indiv <- ggarrange(
   plotlist=c("", p_ssmt.l[[2]][1], "", p_ssmt.l[[2]][2]), 
@@ -319,7 +331,7 @@ p_ssmt_insu_indiv <- ggarrange(
 fig2h <- ggarrange(p_ssmt_glu_indiv, "", p_ssmt_insu_indiv, legend = "none", 
                    nrow=3, heights=c(1.05,0.025,1.0), align="hv") ; fig2h 
 
-fig2h %>% ggsave(filename="../output/fig2h_ssmt_v2.pdf", width=7, height=5)
+fig2h %>% ggsave(filename="../output/fig2h_ssmt_v3.pdf", width=7, height=5)
 
 ## Fig 2i - v1
 fig2i <- ggarrange("", plot_iAUC_strat_panel("glucose", fancy_x = F) + 
@@ -336,6 +348,7 @@ fig2i <- ggarrange("", plot_iAUC_strat_panel("glucose", fancy_x = F) +
                    common.legend = T, legend = "none", nrow=4, heights=c(0.05,1,0.1,1.1)) ; fig2i 
 
 fig2i %>% ggsave(filename="../output/fig2i_ssmt_iauc.pdf", width=4.5, height=5.5)
+
 
 # ===============
 ## Fig 2i - v2
@@ -372,8 +385,8 @@ Basic plotting functions for metabolomics data
 # ================================================================
 ## Volcano plots for metabolomics: for log-transformed betas
 # ================================================================
-plot_volcano.fun <- function(data, p_threshold=0.05/23, beta_threshold=0.5, title="", add_labels=T, bolded_labels=F, 
-                             col1, col2, colUnq=col2, p_label="0.05/23") {
+plot_volcano.fun <- function(data, p_threshold=0.05/30, beta_threshold=0.5, title="", add_labels=T, bolded_labels=F, 
+                             col1, col2, colUnq=col2, p_label="0.05/30") {
   
   p <- data %>% 
     mutate(across(c(beta, se, p), ~as.numeric(.))) %>%
@@ -406,7 +419,7 @@ plot_volcano.fun <- function(data, p_threshold=0.05/23, beta_threshold=0.5, titl
   if(add_labels==T) {
     p <- p + geom_label_repel(aes(label=Lab, fontface = ifelse(add_bold == "bold", "bold", "plain")), 
                               label.padding = 0.05, box.padding = 0.05, nudge_y = 0.1,
-                              size=3, color="black", fill=NA, label.size = 0, max.overlaps = 20)
+                              size=3, color="black", fill=NA, label.size = 0, max.overlaps = 20) ## WAS
   } ; p
 }
 
@@ -415,17 +428,15 @@ plot_volcano.fun <- function(data, p_threshold=0.05/23, beta_threshold=0.5, titl
 
 Summary of metabolite changes by time: postprandial metabolites
 ```{r}
-
+# ========================================================
 ## Descriptive table of ALL labeled metabolites available for analysis
+# ========================================================
+
 met_info %>% 
   select(Method, Compound, MZ, RT, Metabolite=Name, HMDB) %>%
   fwrite("../output/Tab_allMetabolites_print.csv")
 
-# ========================================================
-# Volcano plots for metabolite changes over time 
-# ========================================================
-
-tab_res_mmtt_metab_timeonly <- fread("../output/tab_res_mmtt_metab_timeonly.csv") 
+tab_res_mmtt_metab_timeonly <- fread("../data/processed/tab_prelim_lme_metab_mmtt_timeonly.csv") 
 
 res_mmtt_metab_timeonly <- tab_res_mmtt_metab_timeonly %>% 
   mutate(fc=exp(beta), log2fc=beta/log(2)) %>%
@@ -434,21 +445,38 @@ res_mmtt_metab_timeonly <- tab_res_mmtt_metab_timeonly %>%
   mutate_at("Time", ~paste0(gsub("Time_", "", .), " min")) 
 
 ## Summary of significant metabolites
-tab_descr_metab_postprand_pEff <- res_mmtt_metab_timeonly %>% filter(p<0.05/23) %>% pull(outcome) %>% unique() 
-length(tab_descr_metab_postprand_pEff) # N=307 metabolites changing significantly, based on correction for effective tests P <0.05/23
-tab_descr_metab_postprand_pEff %>% as.data.frame() %>% fwrite("../data/processed/tab_dat_mmtt_metab_postprandial.txt")
+tab_descr_metab_postprand_pEff <- res_mmtt_metab_timeonly %>% 
+  filter(p<0.05/30) %>% pull(outcome) %>% unique() 
 
-# Save descriptive info for significant metabolites
+length(tab_descr_metab_postprand_pEff) # N=429 metabolites changing significantly, based on correction for effective tests P <0.05/30
+tab_descr_metab_postprand_pEff %>% 
+  as.data.frame() %>% fwrite("../data/processed/tab_dat_mmtt_metab_postprandial.txt")
+
+
+## Save descriptive info for significant metabolites
 descr_metab_pp <- met_info %>% 
   select(Method, Compound, MZ, RT, Metabolite=Name, HMDB) %>% 
-  filter(HMDB %in% tab_descr_metab_postprand_pEff) %>%
+  #filter(HMDB %in% tab_descr_metab_postprand_pEff) %>%
   left_join(metab_dict %>% select(HMDB=HMDB_ID, Super.class, Main.class, Sub.class))
 
-# sub-classes
+# Merge in postprandial effect estimate, for Supplementary Table
+descr_metab_pp <- descr_metab_pp %>% left_join(
+  tab_res_mmtt_metab_timeonly %>% select(HMDB=outcome, Exposure, P, Beta.SE) %>%
+    filter(Exposure != "Time_(joint)") %>%
+    mutate_at("Exposure", ~gsub("Time_", "", .)) %>%
+    pivot_wider(names_from="Exposure", values_from=c("Beta.SE", "P")),
+  by="HMDB")  %>% 
+  mutate(P_postprandial = ifelse(P_120<0.05 | P_235 <0.05,1,0)) %>%
+  mutate(P_signif = ifelse(P_120<0.05/30 | P_235 <0.05/30,1,0)) %>%
+  arrange(desc(-log(P_120)))
+
+#descr_metab_pp %>% fwrite("../output/Tab_descr_metabs_postprandial.csv")
+
+## Tabulate sub-classes for all and significant metabolites
 subs <- unique(descr_metab_pp$Sub.class) ; sub_classes <- subs[complete.cases(subs)]
 mains <- unique(descr_metab_pp$Main.class) ; main_classes <- mains[complete.cases(mains)]
 supers <- unique(descr_metab_pp$Super.class) ; super_classes <- supers[complete.cases(supers)]
-tab_metab_subs <- lapply(sub_classes, function(i) {
+tab_metab_subs <- lapply(unique(sub_classes), function(i) {
   metabs <- descr_metab_pp %>% filter(Sub.class == i) 
   n <- nrow(metabs) 
   metabs_formatted <- paste0(metabs %>% pull(Metabolite), collapse=", ")
@@ -463,8 +491,8 @@ tab_metab_subs <- lapply(sub_classes, function(i) {
   n <- sum(metabs$N)
   cbind.data.frame(N.supers = n, metabs)
 }) %>% do.call(rbind.data.frame, .) ; tab_metab_supers %>%
-  select(Super.class, N.supers, Main.class, N.mains, Sub.class, N, Metabolites) %>%
-  fwrite("../output/Tab_res_mmtt_metabolites.csv")
+  select(Super.class, N.supers, Main.class, N.mains, Sub.class, N, Metabolites) 
+tab_metab_subs %>% arrange(Super.class, Main.class, N) %>% fwrite("../output/Tab_res_mmtt_metabolites_v2.csv")
 
 ## Metabolites WITHOUT matched classes
 paste0(descr_metab_pp %>% filter(is.na(Main.class)) %>% pull(Metabolite), collapse = ", ") %>%
@@ -477,7 +505,7 @@ paste0(descr_metab_pp %>% filter(is.na(Main.class)) %>% pull(Metabolite), collap
 ### Summary of metabolites changing by time, STRATIFIED by genotype
 ```{r}
 # Time effect, among all participants (i.e., postprandial metabolites)
-tab_res_mmtt_metab_timeonly <- fread("../output/tab_res_mmtt_metab_timeonly.csv")
+tab_res_mmtt_metab_timeonly <- fread("../data/processed/tab_prelim_lme_metab_mmtt_timeonly.csv")
 res_mmtt_metab_timeonly <- tab_res_mmtt_metab_timeonly %>% 
   mutate(beta=beta/log(2)) %>%
   filter(Exposure != "Time_(joint)") %>%
@@ -494,17 +522,20 @@ res_mmtt_metab_time_bygeno <- tab_res_mmtt_metab_time_bygeno %>%
   mutate_at("Time", ~paste0(gsub("Time_", "", .), " min")) %>%
   mutate_at("Time", ~factor(., levels=c("120 min", "235 min")))
 
+
 ## Metabolite Lists
-metabs.hc120 <- fread("../data/processed/pathways/hc120_pEff_log2fc05.txt", col.names = "V1") %>% pull(V1) ; length(metabs.hc120) #142
-metabs.hc235 <- fread("../data/processed/pathways/hc235_pEff_log2fc05.txt", col.names = "V1") %>% pull(V1) ; length(metabs.hc235) #131
-metabs.hf120 <- fread("../data/processed/pathways/hf120_pEff_log2fc05.txt", col.names = "V1") %>% pull(V1) ; length(metabs.hf120) #111
-metabs.hf235 <- fread("../data/processed/pathways/hf235_pEff_log2fc05.txt", col.names = "V1") %>% pull(V1) ; length(metabs.hf235) #117
+metabs.hc120 <- fread("../data/processed/pathways/hc120_pEff_log2fc05.txt", col.names = "V1") %>% pull(V1) ; length(metabs.hc120) #163
+metabs.hc235 <- fread("../data/processed/pathways/hc235_pEff_log2fc05.txt", col.names = "V1") %>% pull(V1) ; length(metabs.hc235) #187
+metabs.hf120 <- fread("../data/processed/pathways/hf120_pEff_log2fc05.txt", col.names = "V1") %>% pull(V1) ; length(metabs.hf120) #159
+metabs.hf235 <- fread("../data/processed/pathways/hf235_pEff_log2fc05.txt", col.names = "V1") %>% pull(V1) ; length(metabs.hf235) #151
+
 
 ## Counting UNIQUE metabolites in each group
-metabs.hc120[!metabs.hc120 %in% metabs.hf120] %>% length() # 38 unique metabolites for HC/120
-metabs.hf120[!metabs.hf120 %in% metabs.hc120] %>% length() # 7 unique metabolites for HC/120
-metabs.hc235[!metabs.hc235 %in% metabs.hf235] %>% length() # 40 unique metabolites for HC/120
-metabs.hf235[!metabs.hf235 %in% metabs.hc235] %>% length() # 27 unique metabolites for HC/120
+metabs.hc120.unq <- metabs.hc120[!metabs.hc120 %in% metabs.hf120] ; length(metabs.hc120.unq) # 26 unique metabolites for HC/120
+metabs.hf120.unq <- metabs.hf120[!metabs.hf120 %in% metabs.hc120] ; length(metabs.hf120.unq) # 22 unique metabolites for HC/120
+metabs.hc235.unq <- metabs.hc235[!metabs.hc235 %in% metabs.hf235] ; length(metabs.hc235.unq) # 57 unique metabolites for HC/120
+metabs.hf235.unq <- metabs.hf235[!metabs.hf235 %in% metabs.hc235] ; length(metabs.hf235.unq) # 21 unique metabolites for HC/120
+
 
 ## Listing time-specific metabolites for both genotypes (i.e, intersection at each time point)
 metabs.all120 <- (res_mmtt_metab_timeonly %>% filter(outcome %in% c(intersect(metabs.hc120, metabs.hf120))) %>%
@@ -512,44 +543,54 @@ metabs.all120 <- (res_mmtt_metab_timeonly %>% filter(outcome %in% c(intersect(me
 metabs.all235 <- (res_mmtt_metab_timeonly %>% filter(outcome %in% c(intersect(metabs.hc235, metabs.hf235))) %>%
   arrange(p) %>% pull(Outcome))
 
+
 ## Metabolite Labels - SORT by STRENGTH (top 20 unique metabolits for each genotype/time)
-metabs.hc120.lab <- metabs.hc120[!metabs.hc120 %in% metabs.hf120][1:20] ; metabs.hc235.lab <- metabs.hc235[!metabs.hc235 %in% metabs.hf235][1:20]
-metabs.hf120.lab <- metabs.hf120[!metabs.hf120 %in% metabs.hc120][1:20] ; metabs.hf235.lab <- metabs.hf235[!metabs.hf235 %in% metabs.hc235][1:20]
+metabs.hc120.unq.top20 <- metabs.hc120.unq[1:20] ; metabs.hc235.unq.top20 <- metabs.hc235.unq[1:20]
+metabs.hf120.unq.top20 <- metabs.hf120.unq[1:20] ; metabs.hf235.unq.top20 <- metabs.hf235.unq[1:20]
+
+
+## Gather bile acids
+bile_acids <- fread("../data/processed/tab_descr_bileacids_mmtt.csv")
+
+bileacids.hc <- bile_acids %>% filter(HC120_only==1 | HC235_only == 1) %>% pull(Abbrev)
+names(bileacids.hc) <- bile_acids %>% filter(HC120_only==1 | HC235_only == 1) %>% pull(HMDB)
+
+bileacids.all <- bile_acids %>% pull(Abbrev)
+names(bileacids.all) <- bile_acids %>% pull(HMDB)
 
 ```
 
 
+## Volcano plots by genotype
 ```{r}
+# ========================================================
+# Volcano plots for metabolite changes over time 
+# ========================================================
+
 # All participants **for timeonly, the beta coefficients have NOT yet been transformed to log(2)**
 p_v.all <- plot_volcano.fun(
   res_mmtt_metab_timeonly %>% mutate(beta=beta/log(2)) %>%
     mutate(Lab = ifelse(Time == "120 min" & outcome %in% metabs.all120, gsub(" &.*", "", Outcome), 
                         ifelse(Time == "235 min" & outcome %in% metabs.all235, gsub(" &.*", "", Outcome), NA))),
   add_labels = T, col1="#00000098", col2="#7F7F7F95", beta_threshold = 0.5) +
-  facet_grid(cols=vars(Time)) +
-  coord_cartesian(ylim=c(0,20), xlim=c(-8,10)) ; p_v.all
+  facet_grid(cols=vars(Time)) + 
+  #theme(panel.grid = element_line(color="lightgray", linewidth = 0.55)) + 
+  xlab("Beta coefficient for the log2 fold change at \n 120 or 235 min from 0 min") +
+  coord_cartesian(ylim=c(0,25), xlim=c(-8,10)) ; p_v.all
 
-p_v.all %>% ggsave(filename="../output/fig_Sx_mmtt_metab_all.pdf", width=8, height=4)
+p_v.all #%>% ggsave(filename="../output/fig_Sx_mmtt_metab_all.pdf", width=8, height=4)
   
+
 # HC genotype
 p_v.hc <- plot_volcano.fun(
   res_mmtt_metab_time_bygeno %>% 
     mutate_at("Outcome", ~gsub(" or.*", "", .)) %>%
-    mutate_at("Outcome", ~case_when(
-      Outcome == "Taurochenodeoxycholic acid" ~ "TCDCA", 
-      Outcome == "Taurodeoxycholic acid" ~ "TDCA", 
-      Outcome == "Glycodeoxycholic acid" ~ "GDCA",
-      Outcome == "Glycochenodeoxycholic acid" ~ "GCDCA",
-      Outcome == "Glycocholic acid" ~ "GCA", 
-      Outcome == "Taurocholic acid" ~ "TCA", 
-      Outcome == "Glycoursodeoxycholic acid" ~ "GUDCA",
-      Outcome == "Tauroursodeoxycholic acid" | Outcome == "Taurohydrodeoxycholic acid" ~ "TUDCA", 
-      .default = as.character(.))) %>%
-      mutate(Lab = ifelse(Time == "120 min" & outcome %in% metabs.hc120.lab, Outcome, 
-                          ifelse(Time == "235 min" & outcome %in% metabs.hc235.lab, Outcome, NA))) %>% 
-    filter(genotype=="HC genotype"), add_labels = T, bolded_labels = names(bileacids_all),
+    mutate(Outcome = ifelse(outcome %in% names(bileacids.hc), bileacids.hc[outcome], Outcome)) %>% 
+    mutate(Lab = ifelse(Time == "120 min" & outcome %in% metabs.hc120.unq.top20, Outcome, 
+                          ifelse(Time == "235 min" & outcome %in% metabs.hc235.unq.top20, Outcome, NA))) %>% 
+    filter(genotype=="HC genotype"), add_labels = T, bolded_labels = names(bileacids.all),
   col1=parameters$genotype$palette[[2]], col2="#D39373", 
-  beta_threshold = 0.5) +
+  beta_threshold = 0.5, p_threshold = 0.05/30) +
   facet_grid(cols=vars(Time)) + 
   theme(plot.margin = margin(c(0,0,-0.1,0), unit="line"),
         axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
@@ -557,44 +598,36 @@ p_v.hc <- plot_volcano.fun(
         strip.text = element_text(face="bold", size=12)) + 
   #geom_text(data = data.frame(label="HC genotype (N = 12)", x=-8.35, y=12.35), 
    #         aes(x=x, y=y, label=label), inherit.aes = F, hjust=0, vjust=1, size=2, fontface="bold") + 
-  coord_cartesian(ylim=c(0,12), xlim=c(-8,8)) + 
-  scale_y_continuous(breaks=seq(0,12,4)) + scale_x_continuous(breaks=seq(-8,10,4)); p_v.hc
+  coord_cartesian(ylim=c(0,13), xlim=c(-8,8)) + 
+  scale_y_continuous(breaks=seq(0,15,4)) + scale_x_continuous(breaks=seq(-8,10,4)); p_v.hc
 
 
 # HF genotype
 p_v.hf <- plot_volcano.fun(
   res_mmtt_metab_time_bygeno %>% mutate(beta=beta/log(2)) %>% 
     mutate_at("Outcome", ~gsub(" or.*", "", .)) %>%
-    mutate(Lab = ifelse(Time == "120 min" & outcome %in% metabs.hf120.lab, Outcome,
-                        ifelse(Time == "235 min" & outcome %in% metabs.hf235.lab, Outcome, NA))) %>% 
+    mutate(Lab = ifelse(Time == "120 min" & outcome %in% metabs.hf120.unq.top20, Outcome,
+                        ifelse(Time == "235 min" & outcome %in% metabs.hf235.unq.top20, Outcome, NA))) %>% 
     filter(genotype=="HF genotype"), 
   col1=parameters$genotype$palette[[1]], col2="#81A0C8", beta_threshold = 0.5, add_labels = T) +
   facet_grid(cols=vars(Time)) + 
-  xlab("log<sub>2</sub> fold change from 0 min") + 
+  xlab("Beta coefficient for log<sub>2</sub> fold change from 0 min") + 
   theme(plot.margin = margin(c(-1,0,0,0), unit="line"),
         axis.title.x = element_markdown(size=12), axis.text.x = element_text(size=11),
         axis.title.y = element_text(size=12), axis.text.y = element_text(size=11),
         strip.text = element_blank()) +
   #geom_text(data = data.frame(label="HF genotype (N = 10)", x=-8.35, y=12.35), 
    #         aes(x=x, y=y, label=label), inherit.aes = F, hjust=0, vjust=1, size=2, fontface="bold") + 
-  coord_cartesian(ylim=c(0,12), xlim=c(-8,8)) +
-  scale_y_continuous(breaks=seq(0,12,4)) + 
-  scale_x_continuous(breaks=seq(-8,10,4)); p_v.hf
-
-## Vertical-v1
-fig2c <- ggarrange("", ggarrange(p_v.all, p_v.hc, p_v.hf, ncol=1, 
-                                 common.legend = F, legend = "none", heights=c(1.1,0.9,1.1)), 
-                   labels=c("", "c"), widths=c(0.05,1), hjust=0.25, vjust=2, font.label = c(size=16)) 
-#fig2c %>% ggsave(filename="../output/fig2c_mmtt_metab.pdf", width=6, height=7)
-
+  coord_cartesian(ylim=c(0,13), xlim=c(-8,8)) +
+  scale_y_continuous(breaks=seq(0,15,4)) + scale_x_continuous(breaks=seq(-8,10,4)); p_v.hf
 
 ## Vertical-v2, excluding total plot
 fig2c <- ggarrange(ggarrange(p_v.hc, p_v.hf, ncol=1, common.legend = F, legend = "none"))
-fig2c %>% ggsave(filename="../output/fig2c_mmtt_metab_v2.pdf", width=6, height=5.5)
+fig2c %>% ggsave(filename="../output/fig2c_mmtt_metab_v3.pdf", width=6, height=5.5)
 
 ```
 
-
+## Enrichment plots & genotype-specific metabolites 
 ```{r}
 # ====================================================================
 ## Descriptive pathway enrichment plots 
@@ -603,10 +636,10 @@ fig2c %>% ggsave(filename="../output/fig2c_mmtt_metab_v2.pdf", width=6, height=5
 # P <0.05/23 && B >0.05 -------------------
 metab_sets <- rbind.data.frame(
   #fread("../data/metaboanalyst/oea/oea_peff_b05/oea_hc120/msea_ora_result.csv") %>% mutate(set="HC genotype @ 120 min"),
-  fread("../data/metaboanalyst/hc120/v1/msea_ora_result.csv") %>% mutate(set="HC genotype @ 120 min"),
-  fread("../data/metaboanalyst/hc235/v1/msea_ora_result.csv") %>% mutate(set="HC genotype @ 235 min"),
-  fread("../data/metaboanalyst/hf120/v1/msea_ora_result.csv") %>% mutate(set="HF genotype @ 120 min"),
-  fread("../data/metaboanalyst/hf235/v1/msea_ora_result.csv") %>% mutate(set="HF genotype @ 235 min")
+  fread("../data/metaboanalyst/hc120/msea_ora_result.csv") %>% mutate(set="HC genotype @ 120 min"),
+  fread("../data/metaboanalyst/hc235/msea_ora_result.csv") %>% mutate(set="HC genotype @ 235 min"),
+  fread("../data/metaboanalyst/hf120/msea_ora_result.csv") %>% mutate(set="HF genotype @ 120 min"),
+  fread("../data/metaboanalyst/hf235/msea_ora_result.csv") %>% mutate(set="HF genotype @ 235 min")
   ) %>% rename(p="Raw p") %>%
   mutate(log10p=-log10(p)) %>%
   mutate(Metabolite.Set = factor(V1, levels = rev(unique(V1[order(p)])))) %>%
@@ -614,17 +647,17 @@ metab_sets <- rbind.data.frame(
         time = gsub(".*[@] ", "", set)
         ) ; metab_sets
 
-## Filter for only the top 10 pathways
-to_plot <- c("Biosynthesis of unsaturated fatty acids", "Arachidonic acid metabolism", 
-             "Fatty acid metabolism", "Primary bile acid biosynthesis",
-             "Fatty acid elongation", "Fatty acid degradation", "Linoleic acid metabolism", "alpha-Linolenic acid metabolism",
-             "Taurine and hypotaurine metabolism", "Arginine and proline metabolism", "Arginine and proline metabolism",
-             "Fructose and mannose metabolism", "Cysteine and methionine metabolism", "Tryptophan metabolism",
-             "Valine, leucine and isoleucine biosynthesis")
+## Filter for only the top ~15 pathways
+to_plot <- c("Biosynthesis of unsaturated fatty acids", "Primary bile acid biosynthesis",
+             "Pyrimidine metabolism", "Pantothenate and CoA biosynthesis",
+             "beta-Alanine metabolism", "Caffeine metabolism", 
+             "Linoleic acid metabolism", "Alanine, aspartate and glutamate metabolism", 
+             "Thiamine metabolism", "Fatty acid biosynthesis")
 
 fig2d <- metab_sets %>% 
   select(V1, log10p, Metabolite.Set, genotype, time) %>%
   filter(V1 %in% to_plot) %>%
+  mutate_at("Metabolite.Set", ~factor(., levels=rev(Metabolite.Set[c(1:4,9,5:8,10)]))) %>%
   ggplot(aes(x=log10p, y=Metabolite.Set, fill = genotype, group = genotype)) + 
   facet_grid(~time) + 
   theme_bw() + ggplot_ms + 
@@ -640,12 +673,13 @@ fig2d <- metab_sets %>%
         strip.background = element_blank(),
         strip.text.x = element_text(size=8, face="bold"),
         legend.title = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA),
         strip.text = element_text(face="bold", size=10),
         axis.title.x = element_markdown(size=8),
         axis.text.x = element_text(size=8, color="black"),
         axis.text.y = element_text(size=8, color="black")) ; fig2d
 
-fig2d #%>% ggsave(filename="../output/fig2d_pathways.pdf", height=2.5, width=7.5)
+fig2d %>% ggsave(filename="../output/fig2d_pathways_v3.pdf", height=2.5, width=6.5)
 
 ```
 
@@ -659,12 +693,19 @@ scale_y_symmetric <- function(data, var, buffer = 0.05) {
   scale_y_continuous(limits = c(-max_val, max_val))
 }
 
+## Gather bile acids to plot
+bile_acids_to_plot <- c("GCA", "GCDCA", "GDCA", "GUDCA", "TCA", "TCDCA", "TDCA", "TUDCA")
+bile_acids_to_plot <- bile_acids$HMDB[match(bile_acids_to_plot, bile_acids$Abbrev)]
+
 # Determine order for bileacids by strength
 bileacids_ordered <- res_mmtt_metab_time_bygeno %>% 
-  filter(genotype == "HC genotype" & Outcome %in% bileacids) %>% arrange(p)
+  filter(p<0.05/30 & beta/log(2) > 0.5) %>%
+  filter(genotype == "HC genotype" & outcome %in% bile_acids_to_plot) %>%
+  arrange(p)
 
 ## Create dataframe with log(fold_change) for bile acid metabolites: FC = log(m120) - log(m0)
-bileacids_fc.df <- lapply(names(bileacids_all), function(ba) {
+analysis2 <- readRDS("../data/processed/premier_analysis2.rda")
+bileacids_fc.df <- lapply(names(bileacids.all), function(ba) {
   analysis2 %>% select(id, genotype, time, ba) %>%
     mutate_at("time", ~paste0("m", .)) %>%
     filter(time %in% c("m0", "m120")) %>%
@@ -674,12 +715,14 @@ bileacids_fc.df <- lapply(names(bileacids_all), function(ba) {
     select(id, genotype, ba)
   }) %>% reduce(full_join, by=c("id", "genotype"))
 
+
 # =================================
 ## Sumary-level data plots
 # =================================
+
 fig2e <- bileacids_fc.df %>% 
-  pivot_longer(names(bileacids_all)) %>% 
-  mutate_at("name", ~bileacids_all_abbrev[name]) %>%
+  pivot_longer(bile_acids_to_plot) %>% 
+  mutate_at("name", ~bileacids.all[name]) %>%
   mutate_at("genotype", ~relevel(., ref="HC genotype")) %>%
   group_by(genotype, name) %>% filter(!is.na(genotype)) %>%
   reframe(n=n(), mean=mean(exp(value)), sd=sd(exp(value))) %>% mutate(se=mean/sqrt(n)) %>%
@@ -689,7 +732,7 @@ fig2e <- bileacids_fc.df %>%
   scale_color_manual(values=parameters$geno$palette, name=parameters$geno$label) + 
   scale_y_continuous(limits=c(0,16), breaks=c(1,5,10,15)) +
   theme_bw() + ggplot_ms + 
-  ylab(sprintf("120 min fold change \n(mean \u00B1 SE)")) + xlab("") + 
+  ylab(sprintf("120 min fold change")) + xlab("") + #\n(mean \u00B1 SE)
   theme(panel.background = element_blank(),
         panel.grid.minor.y = element_line(),
         axis.text.x = element_text(color="black", size=10, angle=35, hjust=1, vjust=1), 
@@ -700,9 +743,11 @@ fig2e <- bileacids_fc.df %>%
         legend.text = element_text(size=10),
         legend.margin = margin(0.01,1.5,0.5,0.5,"mm")) ; fig2e
 
-fig2e %>% ggsave(filename="../output/fig2e_bafoldchange_v2.pdf", height=3, width=4.95)
+fig2e %>% ggsave(filename="../output/fig2e_bafoldchange_v3.pdf", height=3, width=4.95)
+
 ```
 
+# Heat Map
 ```{r}
 # ============================================================
 ## Heat Map of Bile Acid levels and clinical metabolites
@@ -712,13 +757,13 @@ clinvars <- c("glucose", "insulin", "tg", "ldl", "hdl")
 clinvars.lab <- c("Glucose", "Insulin", "TG", "LDL", "HDL")
 names(clinvars.lab) <- clinvars
 
-lm_ba_clin <- fread("../output/tab_res_ba_clinvars_pearson.csv") %>%
+lm_ba_clin <- fread("../output/tab_res_ba_clinvars_spearman.csv") %>%
   filter(endsWith(ba, "120fc")) %>%
   filter(!grepl("iAUC", y) & !grepl("30",y), !grepl("180",y)) %>%
   separate(y, into=c("outcome", "time"), sep="_") %>%
-  mutate(exposure=bileacids_all_abbrev[gsub("_.*","",ba)]) %>%
+  mutate(exposure=bileacids.all[gsub("_.*","",ba)]) %>%
   # Filter to only BA included above
-  filter(gsub("_.*", "", ba) %in% names(bileacids_all))
+  filter(gsub("_.*", "", ba) %in% bile_acids_to_plot)
 
 hm_ba_clin <- lm_ba_clin %>% 
   arrange(p) %>%
@@ -784,11 +829,11 @@ fig2f <- Heatmap(t(hm_plot),
         #row_labels = c("TG", "HDL", "Insulin", "LDL", "Glucose"),
         col = hm_palette,
         height = unit(4,"cm"), width=unit(3.25,"cm"),
-        heatmap_legend_param = list(title=expression(phantom(0) * italic(r)),
+        heatmap_legend_param = list(title=expression(phantom(0) * italic(ρ)),
                                     legend_title_gp = gpar(fontsize = 12),
                                     legend_text_gp = gpar(fontsize=10),
                                     title_position = "topleft")) ; fig2f
-pdf("../output/fig2f_hm_baclinvars.pdf", height=4, width=3.5) ; fig2f ; dev.off()
+#pdf("../output/fig2f_hm_baclinvars_v3.pdf", height=4, width=3.5) ; fig2f ; dev.off()
 ```
 
 
@@ -805,16 +850,17 @@ res_ssmt_metab_time_bymealxgeno <- tab_res_ssmt_metab_time_bymealxgeno %>%
   mutate_at("Time", ~paste0(gsub("Time_", "", .), " min")) 
 
 ## Metabolite Lists
-hchc <- res_ssmt_metab_time_bymealxgeno %>% filter(genotype == "HC genotype" & meal_type == "HC meal") %>% filter(p<0.05/23) %>% arrange(p) %>% pull(outcome)
-hfhc <- res_ssmt_metab_time_bymealxgeno %>% filter(genotype == "HF genotype" & meal_type == "HC meal") %>% filter(p<0.05/23) %>% arrange(p) %>% pull(outcome)
-hchf <- res_ssmt_metab_time_bymealxgeno %>% filter(genotype == "HC genotype" & meal_type == "HF meal") %>% filter(p<0.05/23) %>% arrange(p) %>% pull(outcome)
-hfhf <- res_ssmt_metab_time_bymealxgeno %>% filter(genotype == "HF genotype" & meal_type == "HF meal") %>% filter(p<0.05/23) %>% arrange(p) %>% pull(outcome)
+hchc <- res_ssmt_metab_time_bymealxgeno %>% filter(genotype == "HC genotype" & meal_type == "HC meal") %>% filter(p<0.05/30) %>% arrange(p) %>% pull(outcome)
+hfhc <- res_ssmt_metab_time_bymealxgeno %>% filter(genotype == "HF genotype" & meal_type == "HC meal") %>% filter(p<0.05/30) %>% arrange(p) %>% pull(outcome)
+hchf <- res_ssmt_metab_time_bymealxgeno %>% filter(genotype == "HC genotype" & meal_type == "HF meal") %>% filter(p<0.05/30) %>% arrange(p) %>% pull(outcome)
+hfhf <- res_ssmt_metab_time_bymealxgeno %>% filter(genotype == "HF genotype" & meal_type == "HF meal") %>% filter(p<0.05/30) %>% arrange(p) %>% pull(outcome)
 
 ## Counting UNIQUE metabolites in each group for MS
-hchc.unq <- hchc[!hchc %in% hfhc] #%>% length() # 23 unique metabolites for HC/HC -- > now 8
-hfhc.unq <- hfhc[!hfhc %in% hchc] #%>% length() # 101 unique metabolites for HF/HC --> now 34
-hchf.unq <- hchf[!hchf %in% hfhf] #%>% length() # 120 unique metabolites for HC/HF --> now 5
-hfhf.unq <- hfhf[!hfhf %in% hchf] #%>% length() # 4 unique metabolites for HF/HF --> now 8
+hchc.unq <- hchc[!hchc %in% hfhc] ; length(hchc.unq) # 23 unique metabolites for HC/HC -- > now 8
+hfhc.unq <- hfhc[!hfhc %in% hchc] ; length(hfhc.unq) # 101 unique metabolites for HF/HC --> now 70
+hchf.unq <- hchf[!hchf %in% hfhf] ; length(hchf.unq) # 120 unique metabolites for HC/HF --> now 41
+hfhf.unq <- hfhf[!hfhf %in% hchf] ; length(hfhf.unq) # 4 unique metabolites for HF/HF --> now 6
+
 
 ## Intersection at each time point (metabolites changing in BOTH genotypes)
 hc <- res_ssmt_metab_time_bymealxgeno %>% filter(outcome %in% c(intersect(hchc, hfhc))) %>%
@@ -823,10 +869,10 @@ hf <- res_ssmt_metab_time_bymealxgeno %>% filter(outcome %in% c(intersect(hchf, 
   arrange(p) %>% pull(outcome) 
 
 ## Metabolite Labels - top 5 && all bile acids
-hchc.labs <- c(hchc.unq[1:5], names(bileacids_all)[-9]) # no change
-hfhc.labs <- c(hfhc.unq[1:5], names(bileacids_all)[-9])
-hchf.labs <- c(hchf.unq[1:5], names(bileacids_all)[-9])
-hfhf.labs <- c(hfhf.unq[1:5], names(bileacids_all)[-9])
+hchc.labs <- c(hchc.unq[1:5], names(bileacids.all)[c(3,6)]) # Include GCA & GDCA; EXCLUDE HMDB0000362 (for oberlaps)
+hfhc.labs <- c(hfhc.unq[1:10], names(bileacids.all)[c(2:3,6)]) # Include GCA & GDCA & TDCA 
+hchf.labs <- c(hchf.unq[1:10]) #, names(bileacids.all)) 
+hfhf.labs <- c(hfhf.unq[1:10]) #, names(bileacids.all)) 
 
 ```
 
@@ -834,24 +880,15 @@ hfhf.labs <- c(hfhf.unq[1:5], names(bileacids_all)[-9])
 
 ## Replace BAs with abbreviations
 res_ssmt_metab_time_bymealxgeno <- res_ssmt_metab_time_bymealxgeno %>% 
-    mutate_at("Outcome", ~case_when(
-      Outcome == "Taurochenodeoxycholic acid" ~ "TCDCA", 
-      Outcome == "Taurodeoxycholic acid" ~ "TDCA", 
-      Outcome == "Glycodeoxycholic acid" ~ "GDCA",
-      Outcome == "Glycochenodeoxycholic acid" ~ "GCDCA",
-      Outcome == "Glycocholic acid" ~ "GCA", 
-      Outcome == "Taurocholic acid" ~ "TCA", 
-      Outcome == "Glycoursodeoxycholic acid" ~ "GUDCA",
-      Outcome == "Tauroursodeoxycholic acid" | Outcome == "Taurohyodeoxycholic acid" ~ "TUDCA", 
-      .default = as.character(.)))
+   mutate(Outcome = ifelse(outcome %in% names(bileacids.all), bileacids.all[outcome], Outcome))
 
 # HC genotype x HC meal
-bold_ba <- names(bileacids_all)[which(names(bileacids_all) %in% hchc.unq)]
+bold_ba <- names(bileacids.all)[which(names(bileacids.all) %in% hchc)]
 p_v.hchc <- plot_volcano.fun(
   res_ssmt_metab_time_bymealxgeno %>% 
     mutate(Lab = ifelse(meal_type == "HC meal" & outcome %in% hchc.labs, Outcome, NA)) %>% 
     filter(genotype == "HC genotype" & meal_type == "HC meal"), add_labels = T, bolded_labels = bold_ba,
-  col1="#E96900", col2="#E8AA80", beta_threshold = 0.25, p_threshold = 0.05/23) +
+  col1="#E96900", col2="#E8AA80", beta_threshold = 0.25, p_threshold = 0.05/30) +
   facet_grid(cols=vars(meal_type)) + 
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey60", size=0.35) +
   theme(plot.margin = margin(c(-1,0,0,0), unit="line"),
@@ -859,36 +896,36 @@ p_v.hchc <- plot_volcano.fun(
         axis.title.y = element_text(size=12), axis.text.y = element_text(size=10),
         strip.text = element_text(face="bold", size=10)) + 
   #geom_text(data = data.frame(label="HC genotype (N = 12)", x=-8.35, y=12.35), aes(x=x, y=y, label=label), inherit.aes = F, hjust=0, vjust=1, size=2, fontface="bold") + 
-  coord_cartesian(ylim=c(0,5), xlim=c(-4,5.5)) + 
-  scale_y_continuous(breaks=seq(0,5,1)) + scale_x_continuous(breaks=seq(-4,6,2)); p_v.hchc
+  coord_cartesian(ylim=c(0,5.5), xlim=c(-4,5.5)) + 
+  scale_y_continuous(breaks=seq(0,6,1)) + scale_x_continuous(breaks=seq(-4,6,2)); p_v.hchc
 
 # HC genotype x HF meal
-bold_ba <- names(bileacids_all)[which(names(bileacids_all) %in% hchf.unq)]
+bold_ba <- names(bileacids.all)[which(names(bileacids.all) %in% hchf)]
 p_v.hchf <- plot_volcano.fun(
   res_ssmt_metab_time_bymealxgeno %>% 
     mutate(Lab = ifelse(meal_type == "HF meal" & outcome %in% hchf.labs, Outcome, NA)) %>% 
     filter(genotype == "HC genotype" & meal_type == "HF meal"), add_labels = T, bolded_labels = bold_ba,
-  col1="#F29741", col2="#F0C398", beta_threshold = 0.25, p_threshold = 0.05/23) +
+  col1="#F29741", col2="#F0C398", beta_threshold = 0.25, p_threshold = 0.05/30) +
   facet_grid(cols=vars(meal_type)) + 
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey60", size=0.35) +
   theme(plot.margin = margin(c(-1,0,0,0), unit="line"),
         axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         axis.title.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank(),
         strip.text = element_text(face="bold", size=10)) + 
-  coord_cartesian(ylim=c(0,5), xlim=c(-4,5.5)) + 
-  scale_y_continuous(breaks=seq(0,5,1)) + scale_x_continuous(breaks=seq(-4,6,2)); p_v.hchf
+  coord_cartesian(ylim=c(0,5.5), xlim=c(-4,5.5)) + 
+  scale_y_continuous(breaks=seq(0,6,1)) + scale_x_continuous(breaks=seq(-4,6,2)); p_v.hchf
 
 # HF genotype x HC meal
-bold_ba <- names(bileacids_all)[which(names(bileacids_all) %in% hfhc.unq)]
+bold_ba <- names(bileacids.all)[which(names(bileacids.all) %in% hfhc)]
 p_v.hfhc <- plot_volcano.fun(
   res_ssmt_metab_time_bymealxgeno %>% 
     mutate(Lab = ifelse(meal_type == "HC meal" & outcome %in% hfhc.labs, Outcome, NA)) %>% 
     filter(genotype == "HF genotype" & meal_type == "HC meal"), add_labels = T, bolded_labels = bold_ba,
-  col1="#5496CE", col2="#A2BFDF", beta_threshold = 0.25, p_threshold = 0.05/23) +
+  col1="#5496CE", col2="#A2BFDF", beta_threshold = 0.25, p_threshold = 0.05/30) +
   facet_grid(cols=vars(meal_type)) + 
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey60", size=0.35) +
   theme(plot.margin = margin(c(-1,0,0,0), unit="line"),
-        axis.title.x = element_text(color="black", size=10), axis.text.x = element_text(size=10),
+        axis.title.x = element_blank(), axis.text.x = element_text(size=10),
         axis.title.y = element_text(size=12), axis.text.y = element_text(size=10),
         strip.text = element_blank()) + 
   coord_cartesian(ylim=c(0,6), xlim=c(-4,5.5)) + 
@@ -896,16 +933,16 @@ p_v.hfhc <- plot_volcano.fun(
 
 
 # HF genotype x HF meal
-bold_ba <- names(bileacids_all)[which(names(bileacids_all) %in% hfhf.unq)]
+bold_ba <- names(bileacids.all)[which(names(bileacids.all) %in% hfhf)]
 p_v.hfhf <- plot_volcano.fun(
   res_ssmt_metab_time_bymealxgeno %>% 
     mutate(Lab = ifelse(meal_type == "HF meal" & outcome %in% hfhf.labs, Outcome, NA)) %>% 
     filter(genotype == "HF genotype" & meal_type == "HF meal"), add_labels = T, bolded_labels = bold_ba,
-  col1="#006EAE", col2="#81A7CB", beta_threshold = 0.25, p_threshold = 0.05/23) +
+  col1="#006EAE", col2="#81A7CB", beta_threshold = 0.25, p_threshold = 0.05/30) +
   facet_grid(cols=vars(meal_type)) + 
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey60", size=0.35) +
   theme(plot.margin = margin(c(-1,0,0,0), unit="line"),
-        axis.title.x = element_text(color="black", size=10), axis.text.x = element_text(size=10),
+        axis.title.x = element_blank(), axis.text.x = element_text(size=10),
         axis.title.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank(),
         strip.text = element_blank()) + 
   coord_cartesian(ylim=c(0,6), xlim=c(-4,5.5)) + 
@@ -914,9 +951,8 @@ p_v.hfhf <- plot_volcano.fun(
 fig2j <- ggarrange(ggarrange(p_v.hchc, "", p_v.hchf, nrow=1, common.legend = T, 
                              legend="none", widths=c(1,0.02, 0.9)), 
           ggarrange(p_v.hfhc, "", p_v.hfhf, nrow=1, common.legend = T, legend="none", 
-                    widths=c(1, 0.02, 0.9)),
-          nrow=2) 
-fig2j %>% ggsave(filename="../output/fig2j_ssmt_metab.pdf", width=6, height=4.5)
+                    widths=c(1, 0.02, 0.9)), nrow=2) ; fig2j
+fig2j %>% ggsave(filename="../output/fig2j_ssmt_metab_v3_noba.pdf", width=6, height=4.5)
 ```
 
 ```{r}
@@ -932,6 +968,63 @@ intersect(hchf, hfhf)
 
 ```
 
+## Supplementary table of bile acid changes by genotype in self-selection meal
+```{r}
+
+analysis2 <- readRDS("../data/processed/premier_analysis2.rda")
+bileacids_fc.df <- lapply(names(bileacids.all), function(ba) {
+  analysis2 %>% select(id, genotype, time, ba) %>%
+    mutate_at("time", ~paste0("m", .)) %>%
+    filter(time %in% c("m0", "m120")) %>%
+    pivot_wider(names_from=time, values_from=ba) %>% 
+    mutate(diff=m120-m0) %>%
+    rename_with(., ~gsub("diff", ba, .)) %>%
+    select(id, genotype, ba)
+  }) %>% reduce(full_join, by=c("id", "genotype"))
+
+
+# =================================
+## Sumary-level data plots
+# =================================
+
+fig2e <- bileacids_fc.df %>% 
+  pivot_longer(bile_acids_to_plot) %>% 
+  mutate_at("name", ~bileacids.all[name]) %>%
+  mutate_at("genotype", ~relevel(., ref="HC genotype")) %>%
+  group_by(genotype, name) %>% filter(!is.na(genotype)) %>%
+  reframe(n=n(), mean=mean(exp(value)), sd=sd(exp(value))) %>% mutate(se=mean/sqrt(n)) %>%
+  ggplot(aes(x=name, group=genotype, y=mean, ymin=mean-se, ymax=mean+se, color=genotype)) +
+  geom_hline(yintercept = 1, linewidth=0.25, color="black") +
+  geom_point(size=2, position=position_dodge(0.35)) + geom_errorbar(width=0.15, linewidth=0.45, position=position_dodge(0.35)) +
+  scale_color_manual(values=parameters$geno$palette, name=parameters$geno$label) + 
+  scale_y_continuous(limits=c(0,16), breaks=c(1,5,10,15)) +
+  theme_bw() + ggplot_ms + 
+  ylab(sprintf("120 min fold change")) + xlab("") + #\n(mean \u00B1 SE)
+  theme(panel.background = element_blank(),
+        panel.grid.minor.y = element_line(),
+        axis.text.x = element_text(color="black", size=10, angle=35, hjust=1, vjust=1), 
+        axis.text.y = element_text(size=11), axis.title.y = element_text(color="black", size=11),
+        legend.direction = "horizontal", legend.title = element_blank(),
+        legend.position = c(0.015, 0.9), legend.justification = c(0,0.5),
+        legend.background = element_rect(fill="white", color = "black"),
+        legend.text = element_text(size=10),
+        legend.margin = margin(0.01,1.5,0.5,0.5,"mm")) ; fig2e
+
+fig2e #%>% ggsave(filename="../output/fig2e_bafoldchange_v3.pdf", height=3, width=4.95)
+
+
+# =============================================
+## Bile acids following self-selected meals
+# =============================================
+res_ssmt_metab_time_bymealxgeno %>%
+  filter(outcome %in% bile_acids_to_plot) %>%
+  mutate(Beta.CI = sprintf("%s (%s, %s)", round(beta,2), round(lowCI,2), round(upCI,2))) %>%
+  select(genotype, meal_type, Outcome, Beta.CI, p) %>%
+  mutate_at("p", ~format_p(.)) %>%
+  pivot_wider(values_from=c(Beta.CI, p), names_from=c(genotype, meal_type)) %>%
+  fwrite("../output/tab_res_ssmt_ba_genoXmeal_betaci.csv")
+  
+```
 
 ##### FIGURE SPECIFICATIONS
 
