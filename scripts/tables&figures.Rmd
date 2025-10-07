@@ -207,22 +207,20 @@ plot_iAUC_strat2 <- function(metabolite, y_extend=c(0.15,0), iAUC=360, data=anal
 ```
 
 
-
-
 ## *Mixed-Meal Tolerance Tests*
 ### Fig 2a,b. Effect of genotype on postprandial resopnses over 4h (a) & 120 min iAUC glucose/insulin
 ```{r}
 ## a) postprandial resposnes by genotype (height=3.5,width=8; error_bar width=10 ??)
 p_glu_geno_indiv <- plot_ppXtime_stratified("glucose", times = c(0,30,60,120,180,235)) +
   coord_cartesian(ylim=c(45,165)) + scale_y_continuous(breaks=seq(30,150,30)) + 
-  annotate("text", x = 60.25, y = 140, label = "*", size = 6) +
+  annotate("text", x = 60.25, y = 140, label = "**", size = 5.25) +
   geom_segment(aes(x = 53, xend = 67, y = 139, yend = 139), linewidth = 0.2, color="black") +
   guides(color = guide_legend(override.aes = list(linetype = 1, size = 1.2)))
 
 p_insu_geno_indiv <- plot_ppXtime_stratified("insulin", times = c(0,30,60,120,180,235)) + 
   coord_cartesian(ylim=c(-5,135)) + scale_y_continuous(breaks=seq(0,125,30)) + 
-  annotate("text", x = 60.25, y = 78, label = "*", size = 6) +
-  geom_segment(aes(x = 53, xend = 67, y = 77, yend = 77), linewidth = 0.25, color="black") 
+  annotate("text", x = 60.25, y = 78, label = "**", size = 5.25) +
+  geom_segment(aes(x = 53, xend = 67, y = 77, yend = 77), linewidth = 0.2, color="black") 
 fig2a <- ggarrange("", p_glu_geno_indiv, "", p_insu_geno_indiv, common.legend = T, 
                    legend = "top", nrow=1, widths=c(0.05,1,0.05,1), align="hv") ; fig2a 
 
@@ -244,7 +242,7 @@ summary(lm(insulin_120iAUC.pos ~ genotype+age+sex+PC1z+PC2z+PC3z, data = analysi
 fig2ab <- ggarrange(fig2a,"", fig2b, ncol=1, align="h", heights=c(1.15, 0.15,1)) ; fig2ab
 
 # Save plot as PDF
-fig2ab %>% ggsave(filename="../output/fig2ab_mmtt_v2.pdf", width=6.5, height=6)
+fig2ab %>% ggsave(filename="../output/fig2ab_mmtt_v3.pdf", width=6.5, height=6)
 
 ```
 
@@ -561,6 +559,7 @@ names(bileacids.all) <- bile_acids %>% pull(HMDB)
 ```
 
 
+
 ## Volcano plots by genotype
 ```{r}
 # ========================================================
@@ -685,7 +684,6 @@ fig2d %>% ggsave(filename="../output/fig2d_pathways_v3.pdf", height=2.5, width=6
 
 
 ## Primary bile acid associations
-
 ```{r}
 scale_y_symmetric <- function(data, var, buffer = 0.05) {
   max_val <- max(abs(data[[var]]), na.rm = TRUE)
@@ -729,7 +727,7 @@ fig2e <- bileacids_fc.df %>%
   ggplot(aes(x=name, group=genotype, y=mean, ymin=mean-se, ymax=mean+se, color=genotype)) +
   geom_hline(yintercept = 1, linewidth=0.25, color="black") +
   geom_point(size=2, position=position_dodge(0.35)) + geom_errorbar(width=0.15, linewidth=0.45, position=position_dodge(0.35)) +
-  scale_color_manual(values=parameters$geno$palette, name=parameters$geno$label) + 
+  scale_color_manual(values=parameters$geno$palette, name=parameters$geno$label, labels = c(expression(HC[PGS]), expression(HF[PGS]))) + 
   scale_y_continuous(limits=c(0,16), breaks=c(1,5,10,15)) +
   theme_bw() + ggplot_ms + 
   ylab(sprintf("120 min fold change")) + xlab("") + #\n(mean \u00B1 SE)

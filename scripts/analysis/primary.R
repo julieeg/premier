@@ -210,6 +210,11 @@ do.call(rbind, lapply(1:length(models_mmtt.l), function(m) {
   mutate_all(., ~ifelse(is.na(.)==T, "-", .)) %>%
   fwrite(paste0("../output/tab_res_mmtt_postprandial_mgdL.csv"))
 
+## Run single models to grab F-test degrees of freedom for interactions
+anova(lmerTest::lmer(glucose ~ genotype*time+age+sex+PC1z+PC2z+PC3z+(1|id),
+                     data=postprandial %>% filter(time %in% c(0,30,60,120,180,235))))
+anova(lmerTest::lmer(insulin ~ genotype*time+age+sex+PC1z+PC2z+PC3z+(1|id),
+                     data=postprandial %>% filter(time %in% c(0,30,60,120,180,235))))
 
 ## iAUCs ---------------------------------------------------
 
@@ -262,6 +267,9 @@ do.call(rbind, lapply(1:length(models_mmtt.l), function(m) {
 ##############################################################################
 ## Self-Selected Meals (time 235-360)
 ##############################################################################
+
+# Genotype effect on meal type selection
+chisq.test(analysis$genotype, analysis$meal_choice)
 
 selected_strata.l <- list(meal=c("HC meal", "HF meal"), geno=c("HC genotype", "HF genotype"))
 models_selected.l <- list(
