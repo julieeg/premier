@@ -8,7 +8,7 @@ library(ComplexHeatmap)
 
 
 ################################################################################ 
-## -------------------- Load & build metabolomics dataset ------------------- ##
+## Load & build metabolomics dataset 
 ################################################################################
 
 # analysis dataset with metabolomics 
@@ -109,28 +109,6 @@ lme_metab_mmtt_geno_pp <- lme_metab_mmtt_geno %>% filter(outcome %in% metabolite
 #lme_metab_mmtt_geno_all %>% fwrite("../output/tab_res_mmtt_metab_genoEffect.csv")
 #lme_metab_mmtt_geno_pp %>% fwrite("../output/tab_res_mmtt_metab_genoEffect_pp.csv")
 lme_metab_mmtt_geno <- fread("../output/tab_res_mmtt_metab_genoEffect.csv")
-
-
-## Run additional sensitivity analyses in demographics & bmi-adjusted models
-#models <- list(primary="age+sex+PC1z+PC2z+PC3z+genotype*time",
-#               bmi="age+sex+PC1z+PC2z+PC3z+genotype*time+bmi")
-
-#lme_metab_mmtt_genoadj <- do.call(rbind.data.frame, lapply(1:2, function(mod) {
-#  lapply(1:length(metabolites), function(m) {
-#    metab <- metabolites[m]
-#    Metabolite <- met_info$Name[met_info$HMDB == metab][1]
-#    run_lme(exposure = "genotype", outcome=metab, 
-#            covariates = models[[mod]], coefficients_to_print = coefs_to_print, 
-#            data=analysis2 %>% filter(time %in% c(0,120,235)), digits=c(1,3)) %>%
-#      mutate(outcome=metab, outcome=Metabolite) %>%
-#      mutate(model=names(models[mod]))
-#    }) %>% do.call(rbind.data.frame, .) 
-#  })) %>% 
-#  arrange(outcome, model) ; lme_metab_postprand_mmtt_adj
-
-# Save as .csv
-#lme_metab_mmtt_genoadj %>% fwrite("../output/tab_res_mmtt_metab_genoEffect_adj.csv")
-#lme_metab_mmtt_genoadj <- fread("../output/tab_res_mmtt_metab_genoEffect_adj.csv")
 
 
 ################################################################################
@@ -348,6 +326,7 @@ exposures <- paste0(bile_acids$HMDB, rep("_120fc",8))
 outcomes <- c(paste0(rep(clinvars, each=2), rep(c("_120", "_235"), length(clinvars))),
               paste0(rep(c("glucose", "insulin"), each=4), rep(c("_60", "_180", "_120iAUC.net", "_60iAUC.net"))))
 
+
 # ===================================================================
 ## Summary table of bile acid levels at 0, 120 and 235 by genotype
 # ===================================================================
@@ -391,7 +370,7 @@ ba_clinvars_corr %>% arrange(p) %>% filter(endsWith(ba,"fc")) %>% filter(p<0.3)
 #ba_clinvars_corr %>% fwrite("../output/tab_res_ba_clinvars_pearson.csv")
 
 
-## USE SPEARMAN CORRELATIONS***
+## Spearman corelations (given non-normality of distributions --> better suited for data)
 
 ba_clinvars_corr_sp <- lapply(exposures, function(x) {
   X <- met_info$Name[met_info$HMDB==gsub("_.*", "", x)][1]
@@ -404,7 +383,7 @@ ba_clinvars_corr_sp %>% arrange(p) %>% filter(endsWith(ba,"fc")) %>% filter(p<0.
 #ba_clinvars_corr_sp %>% fwrite("../output/tab_res_ba_clinvars_spearman.csv")
 
 
-## Stratified by genotype?
+## Test for genotype-specific correlations by stratifing by genotype
 ba_clinvars_corr_bygeno <- lapply(genotypes, function(g) {
   lapply(exposures, function(x) {
     X <- met_info$Name[met_info$HMDB==gsub("_.*", "", x)][1]
@@ -627,9 +606,6 @@ bileacids_fc_ssmt.df <- lapply(names(bileacids.all), function(ba) {
 }) %>% reduce(full_join, by=c("id", "genotype", "meal_choice"))
 
 
-
-
-
 ## Table of 120 min fold change by genotype & meal type
 bileacids_fc_ssmt.df %>% 
   pivot_longer(bile_acids_to_plot) %>% 
@@ -647,10 +623,6 @@ bileacids_fc_ssmt.df %>%
   xlab("Bile Acid Metabolites") + ylab("120 min fold change")
 
 
-
-
-
-
 ## Table of 120 min fold change by genotype & meal type
 bileacids_fc.df %>% 
   pivot_longer(names(bileacids.all)) %>% 
@@ -663,19 +635,6 @@ bileacids_fc.df %>%
   geom_hline(yintercept = 1, linewidth=0.25, color="black") +
   geom_point(size=2, position=position_dodge(0.35)) + geom_errorbar(width=0.15, linewidth=0.45, position=position_dodge(0.35)) +
   scale_color_manual(values=parameters$geno$palette, name=parameters$geno$label) 
-
-
-
-bile_acids
-
-
-
-
-
-
-
-
-
 
 
 ## EOF

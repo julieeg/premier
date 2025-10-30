@@ -1,5 +1,5 @@
-# Title: Rscript to prepare PREMIER data for analysis
-# Author: Julie. E. Gervis
+# Rscript to prepare PREMIER data for analysis
+# Written by Julie. E. Gervis
 
 
 ##########################################
@@ -383,6 +383,4 @@ analysis_mmol<-analysis %>% mutate(across(starts_with(c("glucose")), ~./18))
 #saveRDS(analysis_mmol, "../data/processed/premier_analysis_mmol.rda")
 
 
-
-
-
+# EOF

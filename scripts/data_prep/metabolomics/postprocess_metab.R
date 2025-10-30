@@ -1,4 +1,5 @@
-## Postprocess Metabolomics Data: Building Analytical Dataset
+# Postprocess Metabolomics Data: Building Analytical Dataset
+# Written by Julie E. Gervis
 
 library(tidyverse) ; library(data.table)
 detach("package:swamp", unload = TRUE)

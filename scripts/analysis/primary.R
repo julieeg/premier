@@ -1,4 +1,6 @@
-# Statistical comparisons
+# Primary analysis scripts for PREMIER manuscript
+# Written by Julie E. Gervis
+
 
 library(tidyverse)
 library(data.table)
@@ -20,7 +22,7 @@ analysis <- readRDS("../data/processed/premier_analysis.rda") %>%
 
 
 ################################################################################
-##  ---------------------  Build Variable Groups ---------------------------  ##
+##  Build variable Groups 
 ################################################################################
 
 ## Table 1 vars --------------------
@@ -71,7 +73,7 @@ names(hdl_vars) <- paste0(rep("hdl", 4), c("", "_120", "_235", "_360"))
 
 
 ################################################################################
-##  -------------------  Descriptive statistics ----------------------------  ##
+## Descriptive statistics 
 ################################################################################
 
 ## Set lists of variables & strata -----------------
@@ -127,7 +129,7 @@ t.test(glucose_60iAUC.pos~genotype,data=analysis)
 
 
 ################################################################################
-##  ------------------ Postprandial glycemic responses  --------------------- ##
+## Postprandial glycemic responses  
 ################################################################################
 
 ## Create a long dataframe, by time: postprandial
@@ -530,7 +532,7 @@ do.call(rbind, lapply(metabolites, function(m) {
 
 
 ##################################################################
-##  ---------- Sensitivity analyses  (Self-Selected) ---------- ##
+## Sensitivity analyses: Self-Selected MMTTs
 ##################################################################
 
 ## Additionally adjust for energy/carb/protein consumed 
@@ -598,8 +600,5 @@ do.call(rbind, lapply(metabolites, function(m) {
 })) #%>% fwrite("../output/tab_result_lme_glycemic_mmtt_primary_v2.csv")
 
 
-
 ## EOF 
-
-
 

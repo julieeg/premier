@@ -1,4 +1,6 @@
 # Prepare metabolomics data following manning-lab-metabolomics-qc pipeline
+# Written by Magdalena Sevilla-Gonzalez/Paul Hanson 
+# Adapted by Julie E. Gervis
 
 # ====================================================
 ## 00_install_pkgs.R

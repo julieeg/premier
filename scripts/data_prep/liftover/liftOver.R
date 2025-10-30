@@ -1,10 +1,10 @@
-## Rscript function to run liftOver 
+# Rscript function to run liftOver 
+# Written by Julie E. Gervis
+
 
 ## Note:
 # hg19(GRCh37)->hg38(GRCh38)
 # hg38(GRCh38)->hg19(GRCh37)
-
-
 
 ## Command args
 args=commandArgs(trailingOnly=T)
@@ -15,7 +15,6 @@ liftTo="hg38" #args[3]
 file_to_lift <- basename(path_to_file)
 chain <- paste0(liftFrom, "To", gsub("h","H",liftTo))
 file_lifted=gsub(".txt", paste0("_",liftTo, ".txt"), file_to_lift)
-
 
 
 ## Load required packages
@@ -76,8 +75,5 @@ liftOver(path_to_file, liftFrom, liftTo, file_lifted, chain) %>% fwrite(paste0(d
 
 
 ##EOF
-
-
-
 
 
