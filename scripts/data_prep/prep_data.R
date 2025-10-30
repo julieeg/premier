@@ -1,4 +1,10 @@
-# Prepare PREMIER data 
+# Title: Rscript to prepare PREMIER data for analysis
+# Author: Julie. E. Gervis
+
+
+##########################################
+## Set up & load required packages 
+##########################################
 
 #Load libraries
 library(Hmisc)
@@ -13,8 +19,7 @@ library(readxl)
 lapply(list.files("../../pantry/functions/", recursive = T, full.names = T), source)
 
 
-## CHOOSE UNITS FOR DATA PREPARATION (mg/dL or mmol/L)
-
+## Choose Units
 units <- c("", "_mmol")
 Units <- c("mg/dL", "mmol/L")
 
@@ -22,11 +27,12 @@ unit<-units[1] # ""
 Unit<-Units[1] # mg/dL
 
 
-##########################
-## Build base dataframe ##
-##########################
+####################################################
+## Build base dataframe 
+####################################################
 
-# Define descriptive variable levels
+## Define descriptive variable levels
+
 sex_labs <- c("Female"=0, "Male"=1)
 yes_no_labs <- c("Yes"=1, "No"=0)
 race_labs <- c("White"=1, "Black"=2, "Asian"=3, "More than 1 race"=4, "Unknown or not reported"=5, 
@@ -40,10 +46,9 @@ complete_labs <- c("Incomplete"=0, "Unverified"=1, "Complete"=2)
 
 
 # ===========================================
-## Read In Participant & Recruitment Data 
+## Read in participant & recruitment data 
 # ===========================================
 
-#Read In results data to get participant IDs
 allbase.dat=fread('../data/raw/PREMIERResults_DATA_2024-12-18_1509.csv') %>%
   select(!starts_with("qi") & !starts_with("tf")) %>%
   filter(study_id != "test subject") %>%
@@ -52,8 +57,7 @@ allbase.dat=fread('../data/raw/PREMIERResults_DATA_2024-12-18_1509.csv') %>%
 included_participants <- allbase.dat$study_id
 length(included_participants) #N=24
 
-
-#PremierNames data
+# PremierNames data
 names.dat <- fread("../data/raw/PREMIERNames_DATA_2025-01-07_1031.csv")
 names_mrn.dat <- names.dat %>% 
   mutate(Recruitment=add_descr_labels(., "recruitment", recruitment_labs),
@@ -63,15 +67,14 @@ names_mrn.dat <- names.dat %>%
   mutate(initials=paste0(substr(first_name, 1,1), substr(last_name, 1,1))) %>%
   filter(id %in% included_participants)
   
-
-#Recruitment data from MGBB 
-mgbb <- readxl::read_xlsx("../data/raw/PREMIER_StudyIDs_Extremes_BIOBNAK_NotRODY_EMPI_20250123.xlsx") %>%
+# Recruitment data from MGBB/RODY
+recr1 <- readxl::read_xlsx("../data/raw/PREMIER_Recr_StudyIDs1_20250123.xlsx") %>%
   rename("MGH"="MGH...1") %>% select(-"MGH...5") %>%
   mutate(across(c("MGH", "EMPI", "BWH", "Subject.ID"), ~as.character(.)))
 
 
-#Recruitment data from RODY
-rody <- readxl::read_xlsx("../data/raw/Eligible.RODY.extremes_PREMIER.xlsx") %>%
+# Recruitment data from RODY
+recr2 <- readxl::read_xlsx("../data/raw/PREMIER_Recr_StudyIDs2_20250827.xlsx") %>%
   mutate_at(c("MGH", "EMPI", "Subject.ID", "MRN"), ~as.character(.)) %>%
   separate(MRN, into = c("MRN_1", "MRN_2", "MRN_3", "MRN_4", "MRN_5"), sep = ", ") %>%
   select(Subject.ID, study.group, starts_with("MRN")) %>%
@@ -84,8 +87,8 @@ genetic_category <- fread("../data/raw/genetic_category_20250212.csv") %>%
   mutate_at("Subject.ID", ~as.character(.))
 
 
-#Additional premier participant IDs pulled from mgbb 
-addn_mgbb <- fread("../data/raw/addn_premier_subjectIDs_20250209.csv") %>% 
+#Additional premier participant IDs pulled from recr1 
+recr3 <- fread("../data/raw/PREMIER_StudyIDs3_20250827.csv") %>% 
   select(Subject.ID, MRN) %>% 
   mutate(across(c("MRN", "Subject.ID"), ~as.character(.)))
 
@@ -96,6 +99,7 @@ meal_choice<-readxl::read_xlsx("../data/raw/PREMIER_Meal_Data.xlsx") %>%
   filter(!is.na(id))
 meal_choice %>% print(n=30) # NOTE: two participant IDs missing; match using initials
 meal_choice %>% filter(id=="Not provided") #Initials == BB & BG
+
 
 #check which participants have missing meal_choice data
 allbase.dat$study_id[which(!allbase.dat$study_id %in% meal_choice$id)] # P11 & P23
@@ -114,7 +118,6 @@ meal_data_mmtt=readxl::read_xlsx("../data/raw/PREMIER_Meal_Data_Breakfast_MMTT.x
 meal_data_selected=readxl::read_xlsx("../data/raw/PREMIER_Meal_Data_Lunch_Baked_Ziti.xlsx") %>%
   select(all_of(meal_data_names)) %>% rename_with(~paste0("selected_", .), -id)
 meal_data <- inner_join(meal_data_mmtt, meal_data_selected, by = "id")
-
 
 
 # ==================================================================
@@ -168,9 +171,9 @@ survey_data<-fread("../data/raw/mgbb_phenos_premier.txt") %>%
 # ========================================================
 
 names_mrn.dat <- names_mrn.dat %>%
-  left_join(rody %>% select(Subject.ID, MRN, study.group), by = "MRN") %>% 
-  left_join(mgbb %>% select(MRN=MGH, study.group, Subject.ID), by = c("MRN"), relationship = "many-to-many") %>% 
-  left_join(addn_mgbb, by = c("MRN")) %>%
+  left_join(recr2 %>% select(Subject.ID, MRN, study.group), by = "MRN") %>% 
+  left_join(recr1 %>% select(MRN=MGH, study.group, Subject.ID), by = c("MRN"), relationship = "many-to-many") %>% 
+  left_join(recr3, by = c("MRN")) %>%
   rowwise() %>%
   mutate(pps_cat = ifelse(!is.na(study.group.x), study.group.x, study.group.y)) %>%
   mutate(Subject.ID.z = ifelse(is.na(Subject.ID.x), Subject.ID.y, Subject.ID.x)) %>%
@@ -380,6 +383,6 @@ analysis_mmol<-analysis %>% mutate(across(starts_with(c("glucose")), ~./18))
 #saveRDS(analysis_mmol, "../data/processed/premier_analysis_mmol.rda")
 
 
-#EOF
+
 
 
