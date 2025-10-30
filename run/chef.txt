@@ -1,18 +1,38 @@
 Chef_File: PREMIER analyses
 
-premier=/humgen/florezlab/users/jgervis/premier
-merino_dir=/humgen/florezlab/users/jmerino/PREMIER/diet.variants/macronutrients.ps/
+premier=/**/premier
+merino_dir=/**/macronutrients.ps/
 
 
-######################################
-## Re-calculating macronutrient PGS ##
-######################################
+## Recipe -- commands to run from "run" folder
 
-## Pull GWAS summary statistics for genome-wide significant variants 
-# GWAS: Merino et al., BMI-adjusted (build: hg19)
+# 1. Preapre analytical & metabolomics datasets
+Rscript --no-save ../scripts/data_prep/prep_data.R
+Rscript --no-save ../scripts/data_prep/metabolomics/prep_metab.R
+Rscript --no-save ../scripts/data_prep/metabolomics/postprocess_metab.R
+
+
+# 2. Run primary statistical & metabolomics analyses
+Rscript --no-save ../scripts/analysis/primary.R
+Rscript --no-save ../scripts/analysis/metabolomics.R
+
+
+# 3. Run summary.Rmd file to generate all tables & figures for submitted manuscript
+Rscript --no-save ../
+EOF
+
+
+
+
+
+
+
+## 1) Re-calculate macronutrient 
+
+# Pull GWAS summary statistics for genome-wide significant variants (Merino GWAS, BMI-adjusted - build hg19)
 cp $merino_dir/all.snps.upd.txt ../data/raw/merino_macros_allsnps_signif.txt
 
-## Prepare summary stats for PGS calculation
+# Prepare summary stats for PGS calculation
 R --no-save <<EOF
 library(tidyverse) ; library(data.table)
 fread("../data/raw/merino_macros_allsnps_signif.txt") %>% 
@@ -32,26 +52,6 @@ awk '{ if (NR>1) print $2 }' ../data/raw/merino_macros_pgsInput.txt > ./merino_a
 #-Align ea/nea to beta>0
 #-Print: var_id,chr,pos,ref,alt,ea,nea,effect,se
 for macro in {carb,fat} ; do qsub ../scripts/data_prep/prep_sumstats.sh $macro ; done
-
-
-######################################
-## Statitical Analyses 
-######################################
-
-# Preapre analytical & metabolomics datasets
-Rscript --no-save ../scripts/prep_data.R
-Rscript --no-save ../scripts/prep_metab.R
-Rscript --no-save ../scripts/postprocess_metab.R
-
-
-EOF
-
-
-
-
-
-
-
 
 
 

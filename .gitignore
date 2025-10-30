@@ -3,7 +3,7 @@ data/*
 cache/*
 opt/*
 env/*
-run/*
+run_hidden/*
 archive/*
 *.Rhistory
 
