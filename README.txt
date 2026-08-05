@@ -1,15 +1,12 @@
 README file for "Genetic susceptibility for high carbohydrate and fat intake modulates glycemic and metabolomic responses to meals: A recall-by-genotype study” anlayses
 
 
-# contents
+## contents
 ./run = directory from where all analyses are run
 ./scripts = directory containing all analytical scripts
 ./scripts/data_prep/... = sub-directory containing all scripts to prepare premier phenotypic and metabolomic data 
 ./scripts/analysis/... = sub-directory containing all scripts to run primary and sensitivity analyses
-./scripts/summary.Rmd = 
-# parent directories
-premier=/**/premier
-merino_dir=/**/macronutrients.ps/
+./scripts/summary.Rmd = R-markdown file with all code to prepare manuscript figures and tables
 
 
 ## Commands to run from "run" folder
