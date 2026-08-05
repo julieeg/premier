@@ -258,6 +258,7 @@ p_tg_geno_indiv <- plot_ppXtime_stratified("tg", times = c(0,120,235),
   guides(color = guide_legend(override.aes = list(linetype = 1, size = 1.2)))
 ```
 
+
 ### Fig 2g, Meal selection by genotype 
 ```{r, echo=F, warning=F, fig.width=6, fig.height=2}
 fig2g <- analysis %>% group_by(genotype) %>%
@@ -424,7 +425,7 @@ plot_volcano.fun <- function(data, p_threshold=0.05/30, beta_threshold=0.5, titl
 ```
 
 
-Summary of metabolite changes by time: postprandial metabolites
+## Summary of metabolite changes by time: postprandial metabolites
 ```{r}
 # ========================================================
 ## Descriptive table of ALL labeled metabolites available for analysis
@@ -557,8 +558,6 @@ bileacids.all <- bile_acids %>% pull(Abbrev)
 names(bileacids.all) <- bile_acids %>% pull(HMDB)
 
 ```
-
-
 
 ## Volcano plots by genotype
 ```{r}
@@ -866,12 +865,6 @@ hc <- res_ssmt_metab_time_bymealxgeno %>% filter(outcome %in% c(intersect(hchc, 
 hf <- res_ssmt_metab_time_bymealxgeno %>% filter(outcome %in% c(intersect(hchf, hfhf))) %>%
   arrange(p) %>% pull(outcome) 
 
-## Metabolite Labels - top 5 && all bile acids
-hchc.labs <- c(hchc.unq[1:5], names(bileacids.all)[c(3,6)]) # Include GCA & GDCA; EXCLUDE HMDB0000362 (for oberlaps)
-hfhc.labs <- c(hfhc.unq[1:10], names(bileacids.all)[c(2:3,6)]) # Include GCA & GDCA & TDCA 
-hchf.labs <- c(hchf.unq[1:10]) #, names(bileacids.all)) 
-hfhf.labs <- c(hfhf.unq[1:10]) #, names(bileacids.all)) 
-
 ```
 
 ```{r}
@@ -1015,12 +1008,12 @@ fig2e #%>% ggsave(filename="../output/fig2e_bafoldchange_v3.pdf", height=3, widt
 ## Bile acids following self-selected meals
 # =============================================
 res_ssmt_metab_time_bymealxgeno %>%
-  filter(outcome %in% bile_acids_to_plot) %>%
-  mutate(Beta.CI = sprintf("%s (%s, %s)", round(beta,2), round(lowCI,2), round(upCI,2))) %>%
+  filter(outcome %in% bile_acids_primary$HMDB) %>%
+  mutate(Beta.CI = sprintf("%s (%s, %s)", round(beta/log(2),2), round(lowCI,2), round(upCI,2))) %>%
   select(genotype, meal_type, Outcome, Beta.CI, p) %>%
   mutate_at("p", ~format_p(.)) %>%
   pivot_wider(values_from=c(Beta.CI, p), names_from=c(genotype, meal_type)) %>%
-  fwrite("../output/tab_res_ssmt_ba_genoXmeal_betaci.csv")
+  fwrite("../output/natcoms/tab_res_ssmt_ba_primary_genoXmeal.csv")
   
 ```
 
@@ -1064,9 +1057,9 @@ fig2c %>% ggsave(filename="../output/fig2c_mmtt_metab_v2.pdf", width=6, height=5
 ```
 
 
-
+############################
 ## ALL TABLES 
-
+############################
 
 ```{r, echo=F, warning=F}
 
@@ -1128,7 +1121,6 @@ figSx <- ggarrange(p_ssmt_pp_meal, p_ssmt_iauc_meal, common.legend = T, legend =
 
 
 ## Table SX. Self-Selected Meals **
-
 
 results_selected <- rbind.data.frame(
   fread("../output/tab_result_postprandial_selected_allmodels_bymeal_HFref_mgdL.csv"),
@@ -1195,25 +1187,30 @@ tab_metab_ssmt_bymealxgeno %>%
   filter(Exposure != "Time_(joint)") %>%
   filter(p<0.05) %>%
   mutate(Beta.CI=sprintf("%s (%s, %s)", round(beta,2), round(lowCI,2), round(upCI,2)), P=format_p(p)) %>%
-  mutate(gxm=paste(genotype, meal, sep="/")) %>%
+  mutate(gxm=paste(genotype, meal_type, sep="/")) %>%
   select(genotype, meal=meal_type, outcome, Outcome, Beta.CI, P) %>%
   pivot_wider(names_from=c(genotype), values_from=c(Beta.CI, P)) %>%
-  pivot_wider(names_from=c(meal), values_from=starts_with(c("Beta.CI", "P"))) %>%
-  fwrite("../output/tab_res_ssmt_metab_time_bymealxgeno_p05_print.csv", row.names = T)
+  pivot_wider(names_from=c(meal), values_from=starts_with(c("Beta.CI", "P"))) #%>%
+  #fwrite("../output/tab_res_ssmt_metab_time_bymealxgeno_p05_print.csv", row.names = T)
 
-a <- tab_metab_ssmt_bymealxgeno %>%
+tab_ssmt_ba_log2fc_bymealxgeno <- tab_metab_ssmt_bymealxgeno %>%
   filter(Exposure != "Time_(joint)") %>%
-  filter(p<0.05) %>%
-  mutate(Beta.CI=sprintf("%s (%s, %s)", round(beta,2), round(lowCI,2), round(upCI,2)), P=format_p(p)) %>%
-  mutate(gxm=paste(genotype, meal, sep="/")) %>%
+  filter(outcome %in% c(bile_acids %>% 
+                          filter(Abbrev %in% bile_acids_to_plot_abbrev_type[1:6]) %>% pull(HMDB))
+         ) %>%
+  mutate(Beta.CI=sprintf("%s (%s, %s)", round(beta/log(2),2), round(lowCI/log(2),2), round(upCI/log(2),2)), P=format_p(p)) %>%
+  mutate(gxm=paste(genotype, meal_type, sep="/")) %>%
   select(genotype, meal=meal_type, outcome, Outcome, Beta.CI, P) %>%
   pivot_wider(names_from=c(genotype), values_from=c(Beta.CI, P)) %>%
   pivot_wider(names_from=c(meal), values_from=starts_with(c("Beta.CI", "P"))) 
-dim(a)
-length(unique(a$outcome))
+tab_ssmt_ba_log2fc_bymealxgeno
+
+tab_ssmt_ba_primary_int_genoxtime <- fread("../data/processed/tab_ssmt_lme_int_ba_primary_genoxtime.csv")
 
 ```
 
 
 ## EOF
+
+# Last Updated: 08-05-2026
 

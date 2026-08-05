@@ -1,10 +1,18 @@
-Chef_File: PREMIER analyses
+README file for "Genetic susceptibility for high carbohydrate and fat intake modulates glycemic and metabolomic responses to meals: A recall-by-genotype study” anlayses
 
+
+# contents
+./run = directory from where all analyses are run
+./scripts = directory containing all analytical scripts
+./scripts/data_prep/... = sub-directory containing all scripts to prepare premier phenotypic and metabolomic data 
+./scripts/analysis/... = sub-directory containing all scripts to run primary and sensitivity analyses
+./scripts/summary.Rmd = 
+# parent directories
 premier=/**/premier
 merino_dir=/**/macronutrients.ps/
 
 
-## Recipe -- commands to run from "run" folder
+## Commands to run from "run" folder
 
 # 1. Preapre analytical & metabolomics datasets
 Rscript --no-save ../scripts/data_prep/prep_data.R
@@ -19,6 +27,7 @@ Rscript --no-save ../scripts/analysis/metabolomics.R
 
 # 3. Run summary.Rmd file to generate all tables & figures for submitted manuscript
 Rscript --no-save ../summary.Rmd
+Rscript --no-save ../tables_figures.Rmd
 
 
 ## EOF

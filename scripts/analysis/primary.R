@@ -218,6 +218,7 @@ anova(lmerTest::lmer(glucose ~ genotype*time+age+sex+PC1z+PC2z+PC3z+(1|id),
 anova(lmerTest::lmer(insulin ~ genotype*time+age+sex+PC1z+PC2z+PC3z+(1|id),
                      data=postprandial %>% filter(time %in% c(0,30,60,120,180,235))))
 
+
 ## iAUCs ---------------------------------------------------
 
 # primary model & adjusting for metabolite

@@ -1,10 +1,11 @@
-## Analyze metabolomics data
+## Rscript for metabolomics data analysis
 
-library(tidyverse) ; library(data.table)
-lapply(list.files("../../pantry/functions/", recursive = T, full.names = T), source)
-
+library(tidyverse)
+library(data.table)
 library(poolr)
 library(ComplexHeatmap)
+
+lapply(list.files("../../pantry/functions/", recursive = T, full.names = T), source)
 
 
 ################################################################################ 
@@ -15,16 +16,19 @@ library(ComplexHeatmap)
 analysis2 <- readRDS("../data/processed/premier_analysis2.rda") %>%
   filter(!is.na(genotype))
 
-metabolomics_ids <- analysis2 %>% filter(has_metabolomics==1) %>% pull(id) %>% unique()
+# confirm all 22 participants have metabolomics data
+metabolomics_ids <- analysis2 %>% filter(has_metabolomics==1) %>% 
+  pull(id) %>% unique() ; length(metabolomics_ids) # N = 22
 
 # analysis dataset with phenotypes & glycemic traits
 analysis <- readRDS("../data/processed/premier_analysis.rda") %>%
   filter(!is.na(genotype)) %>%
   mutate(has_metabolomics = ifelse(id %in% metabolomics_ids,1,0)) %>%
+  # add lipid levels
   mutate(tg_0=tg, tg_log_0=tg_log, hdl_0=hdl, ldl_0=ldl)
 
 
-# load metabolomics info (built by PH)
+# load metabolomics info file with descriptive metabolite names, compound IDs, weights
 met_info <- fread("../data/processed/met_info_processed.csv")
 metabolites <- names(analysis2 %>% select(starts_with("HMDB"))) #817 TOTAL metabolites
 metabolites_pp <- fread("../data/processed/metbolites_pp.txt")$metabolites_pp # 547 changing postprandially (p<0.05)
@@ -33,9 +37,7 @@ metabclass <- fread("../data/processed/metabolites_subclasses.csv") %>%
 
 ## load external metabolomics data dictionary: RefMet
 #devtools::install_github("metabolomicsworkbench/RefMet")
-#library(RefMet)
-#metab_dict <- refmet_map_df(gsub("_.*", "", metabolites))
-#metab_dict %>% fwrite("../data/processed/met_dictionary.csv")
+library(RefMet)
 metab_dict <- fread("../data/processed/met_dictionary.csv")
 
 
@@ -101,7 +103,7 @@ prop.table(table(metab_pp_shapiro_time0$p_level))
 
 
 ################################################################################
-## Primary analysis: changes in metabolomics profile after standrdized MMTT
+## Primary analysis: changes in metabolomics profile after standardized MMTT
 ################################################################################
 
 # =========================================================
@@ -121,12 +123,12 @@ lme_metab_mmtt_geno_all <- lapply(1:length(metabolites), function(m) {
     mutate_at("Exposure", ~gsub(".* x", "HC Genotype x", .))
   }) %>% do.call(rbind.data.frame, .)
 
-lme_metab_mmtt_geno_pp <- lme_metab_mmtt_geno %>% filter(outcome %in% metabolites_pp)
-
 ## Save as .csv
-#lme_metab_mmtt_geno_all %>% fwrite("../output/tab_res_mmtt_metab_genoEffect.csv")
-#lme_metab_mmtt_geno_pp %>% fwrite("../output/tab_res_mmtt_metab_genoEffect_pp.csv")
-lme_metab_mmtt_geno <- fread("../output/tab_res_mmtt_metab_genoEffect.csv")
+lme_metab_mmtt_geno_all %>% fwrite("../output/tab_res_mmtt_metab_genoEffect.csv")
+
+# Restrict to postprandial metabolites
+lme_metab_mmtt_geno_pp <- lme_metab_mmtt_geno %>% filter(outcome %in% metabolites_pp)
+lme_metab_mmtt_geno_pp %>% fwrite("../output/tab_res_mmtt_metab_genoEffect_pp.csv")
 
 
 ################################################################################
@@ -149,16 +151,15 @@ lme_metab_mmtt_bygeno_all <- lapply(genotypes, function(geno) {
 }) %>% do.call(rbind.data.frame, .)
 
 ## Save as .csv
-#lme_metab_mmtt_bygeno_all %>% fwrite("../output/tab_res_mmtt_metab_timeEffect_byGeno.csv")
-#lme_metab_mmtt_bygeno_pp %>% fwrite("../output/tab_res_mmtt_metab_timeEffect_byGeno_pp.csv")
+lme_metab_mmtt_bygeno_all %>% fwrite("../output/tab_res_mmtt_metab_timeEffect_byGeno.csv")
 
-lme_metab_mmtt_bygeno <- fread("../output/tab_res_mmtt_metab_timeEffect_byGeno.csv")
-lme_metab_mmtt_bygeno_pp <- fread("../output/tab_res_mmtt_metab_timeEffect_byGeno_pp.csv")
+# Restrict to postprandial metabolites
+lme_metab_mmtt_bygeno_pp %>% fwrite("../output/tab_res_mmtt_metab_timeEffect_byGeno_pp.csv")
 
 
-# ==============================================================================
+# ========================================================================
 ## Aggregate list of significant metabolites & fold changes, by genotype
-# ===============================================================================
+# ========================================================================
 
 #dir.create("../data/processed/pathways")
 
@@ -172,26 +173,26 @@ signif_metabs.l <- lapply(genotypes, function(g) {
       mutate_at("time", ~paste0(gsub("Time_", "", .), " min")) %>%
       filter(genotype==g & time == t) %>%
       arrange(p) %>%
-      ## Only keeping metabolites with P<0.05/30 significant & large changes for pathway enrichment ***
+      ## Filter to metabolites with P<0.05/30 & log2fc >0.5 for pathway enrichment ***
       filter(p<0.05/30 & abs(beta/log(2))>0.5) %>% 
-      pull(outcome) %>% unique() }) ## NOTE: CONVERT BETA TO LOG2 FOLD CHANGE FOR THRESHOLD >0.5
+      pull(outcome) %>% unique() }) 
   names(temp) <- names(times) ; temp
 }) ; names(signif_metabs.l) <- names(genotypes)
 
 
 ### Extract metabolite list for common metabolites in ALL participants
 #dir.create("../data/processed/pathways/metab_pEff_log2fc05")
-#lme_metab_mmtt_timeonly <- fread("../data/processed/tab_prelim_lme_metab_mmtt_timeonly.csv")
 
 lapply(c("120", "235"), function(time) {
   lme_metab_mmtt_timeonly %>% 
     filter(Exposure == paste0("Time_",time) & p<0.05/30 & abs(beta/log(2))>0.5) %>% 
     pull(outcome) %>%
-    as.data.frame() %>% fwrite(paste0("../data/processed/pathways/all",time,"_pEff_log2fc05.txt"), col.names = F)
+    as.data.frame() %>% 
+    fwrite(paste0("../data/processed/pathways/all",time,"_pEff_log2fc05.txt"), col.names = F)
 })
 
 
-## Save list of ALL metabolites with LARGE & SIGNIF effects for each genotype and time point
+## Save list of ALL metabolites with signif & large effects for each PGS & time
 signif_metabs.l$HC$m120 %>% as.data.frame() %>% fwrite("../data/processed/pathways/hc120_pEff_log2fc05.txt")
 signif_metabs.l$HC$m235 %>% as.data.frame() %>% fwrite("../data/processed/pathways/hc235_pEff_log2fc05.txt")
 signif_metabs.l$HF$m120 %>% as.data.frame() %>% fwrite("../data/processed/pathways/hf120_pEff_log2fc05.txt")
@@ -199,15 +200,12 @@ signif_metabs.l$HF$m235 %>% as.data.frame() %>% fwrite("../data/processed/pathwa
 union(signif_metabs.l$HC$m120, signif_metabs.l$HF$m120) %>% as.data.frame() %>% fwrite("../data/processed/pathways/m120_pEff_log2fc05.txt")
 union(signif_metabs.l$HC$m235, signif_metabs.l$HF$m235) %>% as.data.frame() %>% fwrite("../data/processed/pathways/m235_pEff_log2fc05.txt")
 
-# Union
+# Compare metabolites across PGS and time points
 intersect(signif_metabs.l$HC$m120, signif_metabs.l$HF$m120) %>% length() # 138
 intersect(signif_metabs.l$HC$m235, signif_metabs.l$HF$m235) %>% length() # 131
-
-
-## Look at the metabolite types reflected in each genotype/time
 metab_dict %>% filter(Input.name %in% signif_metabs.l$HC$m120) %>% reframe(Super=n_pct(Sub.class))
-metab_dict %>% filter(Input.name %in% c(intersect(signif_metabs.l$HC$m120, signif_metabs.l$HF$m120) )) %>% reframe(Super=n_pct(Sub.class))
-
+metab_dict %>% filter(Input.name %in% c(intersect(signif_metabs.l$HC$m120, signif_metabs.l$HF$m120) )) %>% 
+  reframe(Super=n_pct(Sub.class))
 
 ## Merge full metabolite list with time effects for combined supplementary table
 metab_suppl_info <- full_join(fread("../data/processed/met_info_processed.csv") %>% unique(.),
@@ -222,59 +220,15 @@ metab_suppl_info <- full_join(fread("../data/processed/met_info_processed.csv") 
 metab_suppl_info %>% fwrite("../output/tab_res_mmtt_metab_ppwithdescr.csv")
 
 
-# --------------------------------------------------------------------------
-## Adding metabolite lists without beta filtering, from reviewer comments
-# --------------------------------------------------------------------------
-
-# significant metabolites by genotype
-signif_metabs_nobeta.l <- lapply(genotypes, function(g) {
-  temp <-lapply(times, function(t) {
-    lme_metab_mmtt_bygeno_pp %>% rename(time=Exposure) %>%
-      mutate_at("time", ~paste0(gsub("Time_", "", .), " min")) %>%
-      filter(genotype==g & time == t) %>%
-      arrange(p) %>%
-      ## Only keeping metabolites with P<0.05/30 for pathway enrichment ***
-      filter(p<0.05/30) %>% 
-      pull(outcome) %>% unique()0 }) 
-  names(temp) <- names(times) ; temp
-}) ; names(signif_metabs_nobeta.l) <- names(genotypes)
-
-# significant metabolites, common across genotypes
-#lme_metab_mmtt_timeonly <- fread("../data/processed/tab_prelim_lme_metab_mmtt_timeonly.csv")
-lapply(c("120", "235"), function(time) {
-  lme_metab_mmtt_timeonly %>% 
-    filter(Exposure == paste0("Time_",time) & p<0.05/30) %>% 
-    pull(outcome) %>%
-    as.data.frame() %>% fwrite(paste0("../data/processed/pathways/all",time,"_pEff30.txt"), col.names = F)
-})
-
-# Save list of ALL metabolites with SIGNIF effects for each genotype and time point
-signif_metabs_nobeta.l$HC$m120 %>% as.data.frame() %>% fwrite("../data/processed/pathways/hc120_pEff30.txt")
-signif_metabs_nobeta.l$HC$m235 %>% as.data.frame() %>% fwrite("../data/processed/pathways/hc235_pEff30.txt")
-signif_metabs_nobeta.l$HF$m120 %>% as.data.frame() %>% fwrite("../data/processed/pathways/hf120_pEff30.txt")
-signif_metabs_nobeta.l$HF$m235 %>% as.data.frame() %>% fwrite("../data/processed/pathways/hf235_pEff30.txt")
-union(signif_metabs_nobeta.l$HC$m120, signif_metabs_nobeta.l$HF$m120) %>% as.data.frame() %>% fwrite("../data/processed/pathways/m120_pEff30.txt")
-union(signif_metabs_nobeta.l$HC$m235, signif_metabs_nobeta.l$HF$m235) %>% as.data.frame() %>% fwrite("../data/processed/pathways/m235_pEff30.txt")
-
-# Union
-intersect(signif_metabs_nobeta.l$HC$m120, signif_metabs_nobeta.l$HF$m120) %>% length() # 138 --> 186
-intersect(signif_metabs_nobeta.l$HC$m235, signif_metabs_nobeta.l$HF$m235) %>% length() # 131 --> 231
-
-# Look at the metabolite types reflected in each genotype/time
-metab_dict %>% filter(Input.name %in% signif_metabs_nobeta.l$HC$m120) %>% reframe(Super=n_pct(Sub.class)) %>% arrange(Super)
-metab_dict %>% filter(Input.name %in% signif_metabs_nobeta.l$HF$m120) %>% reframe(Super=n_pct(Sub.class)) %>% arrange(Super)
-metab_dict %>% filter(Input.name %in% c(intersect(signif_metabs.l$HC$m120, signif_metabs.l$HF$m120) )) %>% reframe(Super=n_pct(Sub.class))
-
-
-# ===============================================================================================
-## After running Pathway Enrichment Analysis --> Find significant differences in BA metabolism
-# ===============================================================================================
+# ===============================================================
+## Based on enrichment analysis, examine bile acid metabolites 
+# ===============================================================
 
 # ------------------------------------------------
 ## Filtering by p<0.05/30 & log2fc > 0.5
 # ------------------------------------------------
 
-## Gather all bile acids
+## Gather ALL bile acids
 all_bile_acids <- c(metab_dict %>% filter(Main.class == "Bile acids") %>% 
   filter(HMDB_ID %in% metabolites_pp) %>% pull(HMDB_ID)) 
 
@@ -283,7 +237,6 @@ bile_acids <- metab_suppl_info %>% filter(P_signif == 1 & HMDB %in% all_bile_aci
     Abbrev = c("GLCA", "TDCA", "GDCA", "TCDCA", "GCDCA", "GCA", "TCA", "GUDCA", "DCA", "TUDCA", "Tα-MCA", "aHC", "CDCA", "CA")
   ) ; bile_acids 
 
-
 bile_acids <- bile_acids %>% rowwise() %>%
   mutate(HC120_only = ifelse(HMDB %in% signif_metabs.l$HC$m120 & !HMDB %in% signif_metabs.l$HF$m120,1,0)) %>%
   mutate(HF120_only = ifelse(!HMDB %in% signif_metabs.l$HC$m120 & HMDB %in% signif_metabs.l$HF$m120,1,0)) %>%
@@ -293,32 +246,14 @@ bile_acids <- bile_acids %>% rowwise() %>%
   mutate(Both235_Geno = ifelse(HMDB %in% signif_metabs.l$HC$m235 & HMDB %in% signif_metabs.l$HF$m235,1,0))
 bile_acids %>% fwrite("../data/processed/tab_descr_bileacids_mmtt.csv")
 
-
-## Gather all bile acids
-all_bile_acids <- c(metab_dict %>% filter(Main.class == "Bile acids") %>% 
-                      filter(HMDB_ID %in% metabolites_pp) %>% pull(HMDB_ID)) 
-
-bile_acids <- metab_suppl_info %>% filter(P_signif == 1 & HMDB %in% all_bile_acids) %>%
-  select(HMDB, Name, starts_with("P_")) %>% mutate(
-    Abbrev = c("GLCA", "TDCA", "GDCA", "TCDCA", "GCDCA", "GCA", "TCA", "GUDCA", "DCA", "TUDCA", "Tα-MCA", "aHC", "CDCA", "CA")
-  ) ; bile_acids 
-
-
-bile_acids <- bile_acids %>% rowwise() %>%
-  mutate(HC120_only = ifelse(HMDB %in% signif_metabs.l$HC$m120 & !HMDB %in% signif_metabs.l$HF$m120,1,0)) %>%
-  mutate(HF120_only = ifelse(!HMDB %in% signif_metabs.l$HC$m120 & HMDB %in% signif_metabs.l$HF$m120,1,0)) %>%
-  mutate(Both120_Geno = ifelse(HMDB %in% signif_metabs.l$HC$m120 & HMDB %in% signif_metabs.l$HF$m120,1,0)) %>%
-  mutate(HC235_only = ifelse(HMDB %in% signif_metabs.l$HC$m235 & !HMDB %in% signif_metabs.l$HF$m235,1,0)) %>%
-  mutate(HF235_only = ifelse(!HMDB %in% signif_metabs.l$HC$m235 & HMDB %in% signif_metabs.l$HF$m235,1,0)) %>%
-  mutate(Both235_Geno = ifelse(HMDB %in% signif_metabs.l$HC$m235 & HMDB %in% signif_metabs.l$HF$m235,1,0))
-bile_acids %>% fwrite("../data/processed/tab_descr_bileacids_mmtt.csv")
-
+# List only PRIMARY bile acids
+bile_acids_primary <- bile_acids %>% filter(Abbrev %in% c("CA", "GCA", "TCA", "CDCA", "GCDCA", "TCDCA"))
 
 # ===========================================================
 ## Calculate 120 min log2 fold change for all bile acids
 # ===========================================================
 
-bileacids_fc.df <- lapply(bile_acids$HMDB, function(ba) {
+bileacids_log2fc.df <- lapply(bile_acids$HMDB, function(ba) {
   # 120min fold change
   analysis2 %>% select(id, genotype, time, all_of(ba)) %>%
     mutate_at("time", ~paste0("m", .)) %>%
@@ -327,7 +262,7 @@ bileacids_fc.df <- lapply(bile_acids$HMDB, function(ba) {
     mutate(diff_120fc=(m120-m0)/log(2)) %>% # log2 120 min fold change
     rename_with(., ~gsub("diff", ba, .)) %>%
     select(id, genotype, paste0(ba,"_120fc")) %>% left_join(
-      #240 min fold change
+      #235 min fold change
   analysis2 %>% select(id, genotype, time, all_of(ba)) %>%
     mutate_at("time", ~paste0("m", .)) %>%
     filter(time %in% c("m0", "m235")) %>%
@@ -338,7 +273,7 @@ bileacids_fc.df <- lapply(bile_acids$HMDB, function(ba) {
 }) %>% reduce(full_join, by=c("id", "genotype"))
 
 
-## Build dataset with significant metabolites, glucose, insulin and lipids
+## Build dataset with metabolites, glucose, insulin and lipids
 postprandial2 <- analysis %>% 
    #rename(tg_0=tg, hdl_0=hdl, ldl_0=ldl) %>%
   select(id, starts_with(c("glu", "insu", "tg", "ldl", "hdl")), -starts_with("tg_log"),
@@ -355,9 +290,9 @@ postprandial2 <- left_join(postprandial2, analysis2 %>% select(id, time, bile_ac
 head(postprandial2)
 
 
-##################################################################################### 
-# Post-hoc analyses of Bile Acid metabolites 
-#####################################################################################
+################################################################################ 
+# Post-hoc analyses of BA metabolites 
+################################################################################
 
 # Load in postprandial data from primary glycemic analyses
 postprandial <- readRDS("../data/processed/postprandial_long.rda")
@@ -372,9 +307,7 @@ ba <- left_join(
                                                    "glucose", "insulin", "hdl", "ldl", "tg", "tg.log") %>%
     rename_at(c(bile_acids$HMDB, "glucose", "insulin", "hdl", "ldl", "tg", "tg.log"), ~paste0(., "_120")),
   # BA fold change from 0 to 120
-  bileacids_fc.df, by = "id") %>% 
-  # glucose and insulin 120 min iAUC
-  #left_join(analysis %>% select(id, c(paste0(paste(rep(c("glucose", "insulin"), each=7), c(30, 60, 120, 180, 235, 270, 360), sep="_"), rep("iAUC.net",7)))), by="id") %>%
+  bileacids_log2fc.df, by = "id") %>% 
   # glucose and insulin at 0 min
   left_join(postprandial %>% filter(time == 0) %>% select(id, "glucose", "insulin") %>% rename_at(c("glucose", "insulin"), ~paste0(., "_0")), by="id") %>%
   # glucose and insulin at 30 min
@@ -391,7 +324,7 @@ ba <- left_join(
               rename_at(bile_acids$HMDB, ~paste0(., "_0")), by="id") %>%
   left_join(postprandial %>% filter(time == 0) %>% select(id, tg) %>% mutate(tg.log_0 = log(tg)), by = "id") %>% 
   filter(complete.cases(genotype)) %>%
-  # Add changes for each clinical metabolite??
+  # Add changes for each clinical metabolites
   mutate(
     glucose_0to60 = glucose_60 - glucose_0, glucose_0to120 = glucose_120 - glucose_0, 
     glucose_0to180 = glucose_180 - glucose_0, glucose_0to235 = glucose_235 - glucose_0,
@@ -401,26 +334,12 @@ ba <- left_join(
   )
 
 
-ba <- ba %>% 
-  rowwise() %>%
-  # Add total BA metabolites at 120 and 235
-  mutate(totalBA_120 = rowSums(across(c(paste0(bile_acids$HMDB, "_120")))),
-         totalBA_235 = rowSums(across(c(paste0(bile_acids$HMDB, "_235"))))) %>% 
-  # Add total BA at 0
-  left_join(postprandial2 %>% filter(time == 0) %>% select(id, bile_acids$HMDB) %>%
-              mutate(totalBA_0 = rowSums(across(bile_acids$HMDB))) %>%
-              select(id, totalBA_0), by="id") %>%
-  mutate(totalBA_120fc = totalBA_120 - totalBA_0)
-
-#ba %>% fwrite("../data/processed/bileacids_clinvars_log2fc.csv")
-ba <- fread("../data/processed/bileacids_clinvars_log2fc.csv")
-
 # =================================================================
 # Compile all exposures and outcomes to text with LINEAR models
 # =================================================================
 
 ## Exposures: 120 iAUC, 120 min levels, 120 min fold change
-exposures <- paste0(bile_acids$HMDB, rep("_120fc",14))
+exposures <- paste0(bile_acids_primary$HMDB, rep("_120fc",14))
 
 ## Outcomes: 120 iAUC, 120 min levels, 120 min fold change
 outcomes <- c(paste0(rep(clinvars, each=2), rep(c("_120", "_235"), length(clinvars))),
@@ -430,7 +349,7 @@ outcomes <- c(paste0(rep(clinvars, each=2), rep(c("_120", "_235"), length(clinva
 ## Summary table of bile acid levels at 0, 120 and 235 by genotype
 # ===================================================================
 
-ba_formatted <- bile_acids$Abbrev ; names(ba_formatted) <- bile_acids$HMDB
+ba_formatted <- bile_acids_primary$Abbrev ; names(ba_formatted) <- bile_acids_primary$HMDB
 
 lapply(c("0", "120", "235"), function(i) {
   vars <- ba_formatted ; names(vars) <- paste0(names(vars),"_",i)
@@ -446,36 +365,21 @@ lapply(c("0", "120", "235"), function(i) {
   separate("ba", sep="_", into=c("ba", "time"))
 
 ## t-tests of 120 fold change in bile acids by genotype
-lapply(bile_acids$HMDB, function(y) {
-  summary(lm(formula(paste0(y, "_120fc~genotype")), data=ba))$coef
-})
+lapply(bile_acids_primary$HMDB, function(y) {
+  summary(lm(formula(paste0(y, "_120fc~genotype+age+sex+PC1z+PC2z+PC3z")), data=ba))$coef[2,]
+}) %>% do.call(rbind, .) %>% cbind(., bile_acids_primary$Name)
 
 
 # =========================================================================
-## Correlations of 120m FC bile acids with glucose/insulin/TG
+## Correlations of 120m log2 FC bile acids with glucose/insulin/TG
 # =========================================================================
 
 yvars <- c(paste(rep(c("glucose", "insulin"), each=11), c("30","60","120","180","235"), sep="_"),
            "tg.log_120", "tg.log_235")
 
-yvars_change <- c(paste(rep(c("glucose", "insulin"), each=11), c("0to60","0to120","0to180","0to235"), sep="_"),
-           "tg.log_0to120", "tg.log_0to235")
-
-ba_clinvars_corr <- lapply(exposures, function(x) {
-  X <- met_info$Name[met_info$HMDB==gsub("_.*", "", x)][1]
-  lapply(c(yvars), function(y) {
-  cor <- cor.test(ba %>% pull(x), ba  %>%  pull(y))
-  cbind.data.frame(BA=X, ba=x, y=y, cor=cor$estimate, p=cor$p.value, lowci=cor$conf.int[[1]], upci=cor$conf.int[[2]])
-  }) %>% do.call(rbind.data.frame, .) 
-})  %>% do.call(rbind.data.frame, .) %>% unique()
-ba_clinvars_corr %>% arrange(p) %>% filter(endsWith(ba,"fc")) %>% filter(p<0.05)
-#ba_clinvars_corr %>% fwrite("../output/tab_res_ba_clinvars_pearson.csv")
-
-ba_clinvars_corr <- fread("../output/tab_res_ba_clinvars_pearson.csv")
-
-# -----------------------------------------------
-## Spearman corelations (USED IN MANUSCRIPT)
-# -----------------------------------------------
+yvars_change <- c(paste(rep(c("glucose", "insulin"), each=11), 
+                        c("0to60","0to120","0to180","0to235"), sep="_"),
+                  "tg.log_0to120", "tg.log_0to235")
 
 # 120 min fold change -------
 ba_clinvars_corr_sp_120fc <- lapply(exposures, function(x) {
@@ -486,10 +390,8 @@ ba_clinvars_corr_sp_120fc <- lapply(exposures, function(x) {
   }) %>% do.call(rbind.data.frame, .) 
 })  %>% do.call(rbind.data.frame, .) %>% unique()
 ba_clinvars_corr_sp_120fc %>% arrange(p) %>% filter(endsWith(ba,"fc")) %>% filter(p<0.05)
-#ba_clinvars_corr_sp_120fc %>% fwrite("../output/tab_res_ba_clinvars_xsect_spearman_120log2fc.csv")
-
-ba_clinvars_corr_sp_xsect_120fc <- fread("../output/tab_res_ba_clinvars_xsect_spearman_120log2fc.csv")
-ba_clinvars_corr_sp_change_120fc <- fread("../output/tab_res_ba_clinvars_change_spearman_120log2fc.csv")
+ba_clinvars_corr_sp_120fc %>% fwrite("../output/tab_res_ba_clinvars_xsect_spearman_120log2fc.csv")
+#ba_clinvars_corr_sp_xsect_120fc <- fread("../output/tab_res_ba_clinvars_xsect_spearman_120log2fc.csv")
 
 
 # 235 min fold change ---------------------------------
@@ -503,20 +405,12 @@ ba_clinvars_corr_sp_235fc <- lapply(gsub("120","235",exposures), function(x) {
 ba_clinvars_corr_sp_235fc %>% arrange(p) %>% filter(endsWith(ba,"fc")) %>% filter(p<0.05)
 
 
-## Test for genotype-specific correlations by stratifing by genotype
-ba_clinvars_corr_bygeno <- lapply(genotypes, function(g) {
-  lapply(exposures, function(x) {
-    X <- met_info$Name[met_info$HMDB==gsub("_.*", "", x)][1]
-    lapply(c(yvars), function(y) {
-      cor <- cor.test(ba %>% filter(genotype ==g) %>% pull(x), ba %>% filter(genotype ==g) %>% pull(y))
-      cbind.data.frame(Geno=g, BA=X, ba=x, y=y, cor=cor$estimate, p=cor$p.value, lowci=cor$conf.int[[1]], upci=cor$conf.int[[2]])
-    }) %>% do.call(rbind.data.frame, .) 
-  })  %>% do.call(rbind.data.frame, .) %>% unique()
-}) %>% do.call(rbind.data.frame, .) ; ba_clinvars_corr_bygeno
-ba_clinvars_corr_bygeno %>% arrange(p) %>% filter(endsWith(ba,"fc")) %>% filter(p<0.3)
-
 # Test for genotype*time (0,120) interactions for each bile acid?
-summary(lmerTest::lmer(HMDB0000874~genotype*time+(1|id), data=analysis2 %>% filter(time %in% c(0,120))))
+lapply(1:length(bile_acids_primary$HMDB), function(y) {
+  summary(lmerTest::lmer(formula(paste0(bile_acids_primary$HMDB[y],"~genotype*time+age+sex+PC1z+PC2z+PC3z+(1|id)")), 
+                       data=analysis2 %>% filter(time %in% c(0,120))))$coef[9,]
+}) %>% do.call(rbind, .)
+
 
 #########################################################################################
 ## SELF-SELECTED MIXED MEALS: Run LM for change in metabolites to self-selected meals 
@@ -554,7 +448,7 @@ lme_metab_ssmt_timeonly <- fread("../output/tab_res_ssmt_metab_timeonly_bymeal.c
 # Interpretting: https://blogs.sas.com/content/iml/2023/04/05/interpret-spearman-kendall-corr.html
 # ==================================================================================================
 
-# Tao for time effect in standardized vs HC self-selected MMTT
+# Tab for time effect in standardized vs HC self-selected MMTT
 tao.dat <- inner_join(
   lme_metab_mmtt_timeonly %>%
     filter(Exposure == "Time_120") %>%
@@ -566,7 +460,6 @@ tao.dat <- inner_join(
     dplyr::select(outcome, Outcome, ssmt),
   by=c("Outcome", "outcome")) ; tao.dat
 
-cor(tao.dat$mmtt, tao.dat$ssmt, method="kendall") # 0.457976 = *Moderate to strong* correlation !
 cor.test(tao.dat$mmtt, tao.dat$ssmt, method="kendall") # 0.457976 = *Moderate to strong* correlation !
 res <- cor.test(tao.dat$mmtt, tao.dat$ssmt, method = "kendall")
 res$p.value
@@ -596,7 +489,7 @@ lme_metab_ssmt_bymealxgeno <- lapply(meals, function(meal) {
 #lme_metab_ssmt_bymealxgeno %>% fwrite("../output/tab_res_ssmt_metab_time_bymealxgeno.csv")
 lme_metab_ssmt_bymealxgeno <- fread("../output/tab_res_ssmt_metab_time_bymealxgeno.csv")
 
-lme_metab_ssmt_bymealxgeno %>% filter(p<0.05/23)
+lme_metab_ssmt_bymealxgeno %>% filter(p<0.05/30)
 
 
 # ======================================================================
@@ -648,13 +541,11 @@ ssmt_metabs.l$HC$HF %>% as.data.frame() %>% fwrite("../data/processed/pathways/h
 ssmt_metabs.l$HF$HC %>% as.data.frame() %>% fwrite("../data/processed/pathways/hfhc_pEff_log2fc05.txt")
 ssmt_metabs.l$HF$HF %>% as.data.frame() %>% fwrite("../data/processed/pathways/hfhf_pEff_log2fc05.txt")
 
+# ==================================================
+## Summarize log2 fc in BA by meal x genotype
+# ==================================================
 
-# Are any BA changing in the ssmt?
-lme_metab_ssmt_bymealxgeno %>% filter(outcome %in% names(bileacids.all)) %>%
-  filter(p<0.05) %>%
-  filter(p<0.05/30)
-
-bileacids_fc_ssmt.df <- lapply(names(bileacids.all), function(x) {
+bileacids_log2fc_ssmt.df <- lapply(names(bileacids.all), function(x) {
   analysis2 %>% select(id, genotype, time, meal_choice, names(bileacids.all)) %>%
     filter(time %in% c(235, 360)) %>%
     pivot_longer(names(bileacids.all), values_to="value", names_to="bileacids") %>%
@@ -662,24 +553,20 @@ bileacids_fc_ssmt.df <- lapply(names(bileacids.all), function(x) {
     pivot_wider(names_from=ba_time, values_from="value")  %>%
     
     select(id, mt1=paste0(x, "_235"), mt2=paste0(x, "_360"), genotype, meal_choice) %>%
-    mutate(mdiff=mt2 - mt1) %>%
+    mutate(mdiff= (mt2 - mt1)/log(2)) %>%
     rename_with(., ~gsub("mdiff", paste0(x, "_360fc"), .)) %>%
     select(id, ends_with("fc"), genotype, meal_choice)
-  }) %>% reduce(full_join,by=c("id","genotype", "meal_choice")) ; bileacids_fc_ssmt.df
+}) %>% reduce(full_join,by=c("id","genotype", "meal_choice")) ; bileacids_log2fc_ssmt.df
 
 
 
-# ==================================================
-## Checking Bile acids in self-selection meal
-# ==================================================
-
-## Buld ba dataframe with long.form
+## Build ba dataframe with long.form
 ba.ssmt <- left_join(
   # Bile Acids at 235,360
   postprandial2 %>% filter(time == 235) %>% select(id, age, sex, PC1z, PC2z, PC3z, bile_acids$HMDB,
                                                    "glucose", "insulin", "hdl", "ldl", "tg") %>%
     rename_at(c(bile_acids$HMDB, "glucose", "insulin", "hdl", "ldl", "tg"), ~paste0(., "_235")),
-  bileacids_fc_ssmt.df, by = "id") %>% 
+  bileacids_log2fc_ssmt.df, by = "id") %>% 
   left_join(postprandial %>% filter(time == 270) %>% select(id, "glucose", "insulin") %>% rename_at(c("glucose", "insulin"), ~paste0(., "_270")), by="id") %>%
   left_join(postprandial %>% filter(time == 300) %>% select(id, "glucose", "insulin") %>% rename_at(c("glucose", "insulin"), ~paste0(., "_300")), by="id") %>%
   left_join(postprandial2 %>% filter(time == 360) %>% select(id, bile_acids$HMDB, "glucose", "insulin", "tg", "ldl", "hdl") %>% 
@@ -688,75 +575,32 @@ ba.ssmt <- left_join(
               rename_at(bile_acids$HMDB, ~paste0(., "_0")), by="id") %>%
   filter(complete.cases(genotype))
 
-ba.ssmt <- ba.ssmt %>% 
-  rowwise() %>%
-  # Add total BA metabolites at 120 and 235
-  mutate(totalBA_235 = rowSums(across(c(paste0(bile_acids$HMDB, "_235")))),
-         totalBA_360 = rowSums(across(c(paste0(bile_acids$HMDB, "_360"))))) %>% 
-  # Add total BA at 0
-  left_join(postprandial2 %>% filter(time == 0) %>% select(id, bile_acids$HMDB) %>%
-              mutate(totalBA_0 = rowSums(across(bile_acids$HMDB))) %>%
-              select(id, totalBA_0), by="id") %>%
-  mutate(totalBA_360fc = totalBA_360 - totalBA_235)
-
-
 # Correlations of bile acids with insulin at 360?
 yvars <- c(paste(rep(c("glucose", "insulin"), each=4), c("235", "270", "300", "360"), sep="_"), "tg_235", "tg_360")
-ba_ssmt <- paste0(names(bileacids.all), "_360fc")
+ba_ssmt <- paste0(bile_acids_primary$HMDB, "_360fc")
 
 ba_clinvars_ssmt_sp <- lapply(ba_ssmt, function(x) {
   X <- met_info$Name[met_info$HMDB==gsub("_.*", "", x)][1]
   lapply(c(yvars), function(y) {
-    cor <- cor.test(ba.ssmt %>% pull(x), ba.ssmt  %>%  pull(y))
-    cbind.data.frame(BA=X, ba=x, y=y, cor=cor$estimate, p=cor$p.value, lowci=cor$conf.int[[1]], upci=cor$conf.int[[2]])
+    cor <- cor.test(ba.ssmt %>% pull(x), ba.ssmt  %>% pull(y), method="spearman")
+    cbind.data.frame(BA=X, ba=x, y=y, cor=cor$estimate, p=cor$p.value)
   }) %>% do.call(rbind.data.frame, .) 
-})  %>% do.call(rbind.data.frame, .) %>% unique()
+}) %>% do.call(rbind.data.frame, .) %>% unique()
 ba_clinvars_ssmt_sp %>% arrange(p) %>% filter(endsWith(ba,"fc")) %>% filter(p<0.05)
 #ba_clinvars_corr %>% fwrite("../output/tab_res_ba_clinvars_pearson.csv")
 
-
-## bile acids following SSMT
-bileacids_fc_ssmt.df <- lapply(names(bileacids.all), function(ba) {
-  analysis2 %>% select(id, genotype, meal_choice, time, ba) %>%
-    mutate_at("time", ~paste0("m", .)) %>%
-    filter(time %in% c("m235", "m360")) %>%
-    pivot_wider(names_from=time, values_from=ba) %>% 
-    mutate(diff=m360-m235) %>%
-    rename_with(., ~gsub("diff", ba, .)) %>%
-    select(id, genotype, meal_choice, ba)
-}) %>% reduce(full_join, by=c("id", "genotype", "meal_choice"))
-
-
-## Table of 120 min fold change by genotype & meal type
-bileacids_fc_ssmt.df %>% 
-  pivot_longer(bile_acids_to_plot) %>% 
-  #pivot_longer(names(bileacids.all)) %>% 
-  mutate_at("name", ~bileacids.all[name]) %>%
-  mutate_at("genotype", ~relevel(., ref="HC genotype")) %>%
-  group_by(genotype, meal_choice, name) %>% filter(!is.na(genotype)) %>%
-  reframe(n=n(), mean=mean(exp(value)), sd=sd(exp(value))) %>% mutate(se=mean/sqrt(n)) %>%
-  
-  ggplot(aes(x=name, group=genotype, y=mean, ymin=mean-se, ymax=mean+se, color=genotype)) +
-  facet_grid(rows = vars(meal_choice)) +
-  geom_hline(yintercept = 1, linewidth=0.25, color="black") +
-  geom_point(size=2, position=position_dodge(0.35)) + geom_errorbar(width=0.15, linewidth=0.45, position=position_dodge(0.35)) +
-  scale_color_manual(values=parameters$geno$palette, name=parameters$geno$label) + 
-  xlab("Bile Acid Metabolites") + ylab("120 min fold change")
-
-
-## Table of 120 min fold change by genotype & meal type
-bileacids_fc.df %>% 
-  pivot_longer(names(bileacids.all)) %>% 
-  mutate_at("name", ~bileacids.all[name]) %>%
-  mutate_at("genotype", ~relevel(., ref="HC genotype")) %>%
-  group_by(genotype, name) %>% filter(!is.na(genotype)) %>%
-  reframe(n=n(), mean=mean(exp(value)), sd=sd(exp(value))) %>% mutate(se=mean/sqrt(n)) %>%
-  
-  ggplot(aes(x=name, group=genotype, y=mean, ymin=mean-se, ymax=mean+se, color=genotype)) +
-  geom_hline(yintercept = 1, linewidth=0.25, color="black") +
-  geom_point(size=2, position=position_dodge(0.35)) + geom_errorbar(width=0.15, linewidth=0.45, position=position_dodge(0.35)) +
-  scale_color_manual(values=parameters$geno$palette, name=parameters$geno$label) 
-
+# Test for genotype*time (235,360) interactions for each bile acid?
+lapply(c("HC meal", "HF meal"), function(m) {
+  lapply(1:length(bile_acids_primary$HMDB), function(y) {
+  summary(lmerTest::lmer(formula(paste0(bile_acids_primary$HMDB[y],"~genotype*time+age+sex+PC1z+PC2z+PC3z+(1|id)")), 
+                         data=analysis2 %>% filter(time %in% c(235,360)) %>%
+                           filter(meal_choice == m)))$coef[9,]
+  }) %>% do.call(rbind, .) %>%
+    as.data.frame() %>%
+    mutate(bile_acid = bile_acids_primary$Abbrev, meal = m, .before=1)
+  }) %>% 
+  do.call(rbind.data.frame, .) %>%
+  fwrite("../data/processed/tab_ssmt_lme_int_ba_primary_genoxtime.csv") # no significant genotype x time interactions 
 
 ## EOF
 
